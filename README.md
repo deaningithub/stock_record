@@ -12,7 +12,7 @@ This repository contains the Apps Script source code and strategy configuration 
 | --- | --- |
 | `Code.js` | Main Apps Script entry point. Sets sheet names, watchlist defaults, Fugle API access, setup helpers, quote collection, daily candle collection, minute replay collection, backfill flow, logging, and shared utilities. |
 | `trigger.js` | Installs and removes Apps Script time-based triggers for daily stock recording, minute replay collection, realtime snapshots, after-close collection, and minute backfill continuation. |
-| `ai_valuation.js` | Recalculates morning AI valuations for enabled watchlist stocks using local sheet data plus OpenAI web search for current Taiwan news, US market context, and catalyst reasoning. |
+| `ai_valuation.js` | Recalculates morning AI valuations for enabled watchlist stocks using local sheet data, the prior 7 days of valuation history, and OpenAI web search for current Taiwan news, US market context, and catalyst reasoning. |
 | `realtime_gas.js` | Collects realtime Fugle intraday quote snapshots and writes quote-derived features such as bid/ask, midpoint, spread percentage, book imbalance, micro price, trade volume, and last trade metadata. |
 | `strategies.js` | Defines baseline intraday backtest strategies, including opening range breakout, VWAP momentum, and dip reversal. |
 | `backtest.js` | Runs baseline strategy backtests against `MinuteReplay` data, simulates entries/exits, calculates costs, and writes trades to `BacktestTrades`. |
@@ -36,7 +36,7 @@ The code expects these Google Sheets tabs:
 | `BacktestReport` | Summary report for baseline strategies. |
 | `DeanBacktestTrades` | Output trades for Dean autostock strategies. |
 | `DeanBacktestReport` | Summary report for Dean autostock strategies. |
-| `AIValuations` | Daily AI fair-value and intraday target estimates with news, US-market impact, limit-up plan, confidence, and sources. |
+| `AIValuations` | Daily AI fair-value and intraday target estimates with news, US-market impact, limit-up plan, confidence, sources, and 7-day trend context for later strategy decisions. |
 | `RunLog` | Runtime logs and API errors. |
 
 ## Setup

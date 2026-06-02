@@ -5,6 +5,7 @@ const AI_VALUATION_CONFIG = {
   openAiBaseUrl: 'https://api.openai.com/v1',
   openAiModel: 'gpt-5',
   maxSymbolsPerRun: 27,
+  valuationHistoryDays: 7,
   openAiKeyProperties: ['OPENAI_API_KEY', 'OPENAI_APIKEY', 'OPENAI_KEY', 'OPENAI'],
   usMarketContext: [
     'NASDAQ futures and prior close',
@@ -44,6 +45,7 @@ function buildAiValuationInputs_(symbols) {
   const latestDaily = getLatestSheetRowsBySymbol_(CONFIG.historySheetName, 'symbol', 'date');
   const latestQuote = getLatestSheetRowsBySymbol_(CONFIG.quoteSheetName, 'symbol', 'recordedAt');
   const latestRealtime = getLatestSheetRowsBySymbol_(GAS_REALTIME_CONFIG.sheetName, 'symbol', 'recordedAt');
+  const valuationHistory = getAiValuationHistoryBySymbol_(symbols, AI_VALUATION_CONFIG.valuationHistoryDays);
   const generatedAt = new Date();
 
   return {
@@ -59,7 +61,8 @@ function buildAiValuationInputs_(symbols) {
         note: config.note || '',
         latestDaily: latestDaily[symbol] || {},
         latestQuote: latestQuote[symbol] || {},
-        latestRealtime: latestRealtime[symbol] || {}
+        latestRealtime: latestRealtime[symbol] || {},
+        valuationHistory7d: valuationHistory[symbol] || []
       };
     })
   };
@@ -133,6 +136,8 @@ function buildAiValuationPrompt_(inputs) {
     '',
     'For each stock, calculate a thoughtful fair value and intraday target, not just a headline summary.',
     'Use the provided local sheet data as market data context; use web search for fresh news and US-market reasoning.',
+    'Also use valuationHistory7d for each symbol. Prefer stocks whose fair value, upside, and confidence have been stable or improving during the last 7 calendar days.',
+    'If today news is exciting but the 7-day valuation trend is deteriorating, reduce confidence and explain why.',
     'The strategy preference is to wait for limit-up candidates when momentum is strong, instead of exiting too early.',
     '',
     'Local sheet data:',
@@ -265,6 +270,61 @@ function getLatestSheetRowsBySymbol_(sheetName, symbolHeader, sortHeader) {
   return latest;
 }
 
+function getAiValuationHistoryBySymbol_(symbols, lookbackDays) {
+  const symbolSet = {};
+  symbols.forEach(symbol => {
+    symbolSet[normalizeSymbol_(symbol)] = true;
+  });
+
+  const sheet = getOrCreateSheet_(getSpreadsheet_(), AI_VALUATION_CONFIG.sheetName);
+  const values = sheet.getDataRange().getValues();
+  if (values.length < 2) {
+    return {};
+  }
+
+  const headers = values[0].map(header => String(header));
+  const index = {};
+  headers.forEach((header, columnIndex) => {
+    index[header] = columnIndex;
+  });
+  if (index.symbol === undefined || index.generatedAt === undefined) {
+    return {};
+  }
+
+  const cutoff = new Date(Date.now() - lookbackDays * 24 * 60 * 60 * 1000);
+  const history = {};
+  values.slice(1).forEach(row => {
+    const symbol = normalizeSymbol_(row[index.symbol]);
+    if (!symbol || !symbolSet[symbol]) {
+      return;
+    }
+    const generatedAt = normalizeAiGeneratedAtDate_(row[index.generatedAt]);
+    if (!generatedAt || generatedAt < cutoff) {
+      return;
+    }
+    if (!history[symbol]) {
+      history[symbol] = [];
+    }
+    history[symbol].push({
+      generatedAt: Utilities.formatDate(generatedAt, AI_VALUATION_CONFIG.timezone, 'yyyy-MM-dd HH:mm:ss'),
+      fairValue: Number(row[index.fairValue] || 0),
+      intradayTarget: Number(row[index.intradayTarget] || 0),
+      downsideRisk: Number(row[index.downsideRisk] || 0),
+      upsidePct: Number(row[index.upsidePct] || 0),
+      confidence: Number(row[index.confidence] || 0),
+      rating: String(row[index.rating] || ''),
+      limitUpPlan: String(row[index.limitUpPlan] || '')
+    });
+  });
+
+  Object.keys(history).forEach(symbol => {
+    history[symbol] = history[symbol]
+      .sort((left, right) => compareSheetValues_(left.generatedAt, right.generatedAt))
+      .slice(-lookbackDays);
+  });
+  return history;
+}
+
 function compareSheetValues_(left, right) {
   const leftTime = Object.prototype.toString.call(left) === '[object Date]' ? left.getTime() : new Date(left).getTime();
   const rightTime = Object.prototype.toString.call(right) === '[object Date]' ? right.getTime() : new Date(right).getTime();
@@ -279,6 +339,14 @@ function normalizeAiInputValue_(value) {
     return Utilities.formatDate(value, AI_VALUATION_CONFIG.timezone, 'yyyy-MM-dd HH:mm:ss');
   }
   return value === undefined || value === null ? '' : value;
+}
+
+function normalizeAiGeneratedAtDate_(value) {
+  if (Object.prototype.toString.call(value) === '[object Date]' && !isNaN(value.getTime())) {
+    return value;
+  }
+  const parsed = new Date(value);
+  return isNaN(parsed.getTime()) ? null : parsed;
 }
 
 function getOpenAiApiKey_() {

@@ -3,7 +3,8 @@ const DEAN_BACKTEST_CONFIG = {
   reportSheetName: 'DeanBacktestReport',
   timezone: 'Asia/Taipei',
   openTime: '09:00',
-  defaultSyntheticSpreadPct: 0.15
+  defaultSyntheticSpreadPct: 0.15,
+  valuationHistoryDays: 7
 };
 
 function runDeanAutoStockBacktests() {
@@ -154,7 +155,14 @@ function shouldDeanEnter_(strategy, context, bar, index) {
     const symbolScore = calculateDeanRotationScore_(strategy, bar);
     const themeScore = calculateDeanThemeScore_(strategy, context, bar);
     const valuationScore = calculateDeanValuationScore_(strategy, bar);
-    const adjustedSymbolScore = clamp_(symbolScore + valuationScore * (strategy.valuation.scoreBonus || 0), 0, 1);
+    const trendScore = calculateDeanValuationTrendScore_(bar.valuation);
+    const adjustedSymbolScore = clamp_(
+      symbolScore +
+      valuationScore * (strategy.valuation.scoreBonus || 0) +
+      trendScore * (strategy.valuation.trendScoreBonus || 0),
+      0,
+      1
+    );
     return adjustedSymbolScore >= strategy.entry.minSymbolScore &&
       themeScore >= strategy.entry.minThemeScore &&
       bar.bookImbalance >= strategy.entry.minBookImbalance &&
@@ -279,7 +287,8 @@ function passesDeanValuationGate_(strategy, bar) {
   }
   return valuation.confidence >= (config.minConfidence || 0) &&
     valuation.upsidePct >= (config.minUpsidePct || 0) &&
-    getDeanRatingRank_(valuation.rating) >= (config.minRatingRank || 0);
+    getDeanRatingRank_(valuation.rating) >= (config.minRatingRank || 0) &&
+    !isDeanValuationDeteriorating_(valuation);
 }
 
 function isDeanStrongValuationHold_(strategy, bar) {
@@ -290,7 +299,8 @@ function isDeanStrongValuationHold_(strategy, bar) {
   }
   return valuation.confidence >= (config.strongHoldConfidence || 999) &&
     valuation.upsidePct >= (config.strongHoldUpsidePct || 999) &&
-    getDeanRatingRank_(valuation.rating) >= 2;
+    getDeanRatingRank_(valuation.rating) >= 2 &&
+    calculateDeanValuationTrendScore_(valuation) >= 0;
 }
 
 function runDeanLimitUpSwing_(strategy, dayContexts) {
@@ -476,7 +486,7 @@ function findDeanFundamentalExit_(strategy, position, holdingDays) {
 
 function buildDeanDayContexts_(barsBySymbolDate) {
   const contexts = {};
-  const valuations = loadLatestDeanAiValuations_();
+  const valuations = loadDeanAiValuationsWithHistory_(DEAN_BACKTEST_CONFIG.valuationHistoryDays);
   Object.keys(barsBySymbolDate).sort().forEach(key => {
     const bars = barsBySymbolDate[key];
     if (!bars.length) {
@@ -545,6 +555,28 @@ function calculateDeanValuationScore_(strategy, bar) {
   const upsideScore = clamp_(bar.valuation.upsidePct / 15, 0, 1);
   const ratingScore = clamp_(getDeanRatingRank_(bar.valuation.rating) / 4, 0, 1);
   return clamp_(confidenceScore * 0.4 + upsideScore * 0.4 + ratingScore * 0.2, 0, 1);
+}
+
+function calculateDeanValuationTrendScore_(valuation) {
+  if (!valuation || !valuation.trend) {
+    return 0;
+  }
+  return clamp_(
+    valuation.trend.fairValueTrendPct / 10 * 0.45 +
+    valuation.trend.upsideTrendPct / 10 * 0.35 +
+    valuation.trend.confidenceTrend / 3 * 0.2,
+    -1,
+    1
+  );
+}
+
+function isDeanValuationDeteriorating_(valuation) {
+  if (!valuation || !valuation.trend || valuation.trend.historyCount < 3) {
+    return false;
+  }
+  return valuation.trend.fairValueTrendPct <= -5 &&
+    valuation.trend.upsideTrendPct <= -5 &&
+    valuation.trend.confidenceTrend <= -1;
 }
 
 function calculateDeanThemeScore_(strategy, context, bar) {
@@ -714,7 +746,7 @@ function buildProxyValuation_(strategy, days) {
     return {
       entryPrice,
       targetPrice,
-      confidence: aiValuation.confidence || strategy.valuation.defaultConfidence
+      confidence: Math.max(1, (aiValuation.confidence || strategy.valuation.defaultConfidence) + calculateDeanValuationTrendScore_(aiValuation))
     };
   }
   return {
@@ -724,7 +756,7 @@ function buildProxyValuation_(strategy, days) {
   };
 }
 
-function loadLatestDeanAiValuations_() {
+function loadDeanAiValuationsWithHistory_(lookbackDays) {
   const sheet = getOrCreateSheet_(getSpreadsheet_(), AI_VALUATION_CONFIG.sheetName);
   const values = sheet.getDataRange().getValues();
   if (values.length < 2) {
@@ -740,44 +772,85 @@ function loadLatestDeanAiValuations_() {
     return {};
   }
 
-  const latest = {};
+  const bySymbol = {};
+  const cutoff = new Date(Date.now() - lookbackDays * 24 * 60 * 60 * 1000);
   values.slice(1).forEach(row => {
     const symbol = normalizeSymbol_(row[index.symbol]);
     if (!symbol) {
       return;
     }
-    const current = latest[symbol];
-    if (!current || compareDeanValuationGeneratedAt_(row[index.generatedAt], current.generatedAtRaw) >= 0) {
-      latest[symbol] = {
-        generatedAtRaw: row[index.generatedAt],
-        symbol,
-        name: String(row[index.name] || ''),
-        lastPrice: Number(row[index.lastPrice] || 0),
-        fairValue: Number(row[index.fairValue] || 0),
-        intradayTarget: Number(row[index.intradayTarget] || 0),
-        downsideRisk: Number(row[index.downsideRisk] || 0),
-        upsidePct: Number(row[index.upsidePct] || 0),
-        confidence: Number(row[index.confidence] || 0),
-        rating: String(row[index.rating] || ''),
-        limitUpPlan: String(row[index.limitUpPlan] || ''),
-        valuationReasoning: String(row[index.valuationReasoning] || '')
-      };
+    const generatedAt = normalizeDeanValuationDate_(row[index.generatedAt]);
+    if (!generatedAt || generatedAt < cutoff) {
+      return;
     }
+    if (!bySymbol[symbol]) {
+      bySymbol[symbol] = [];
+    }
+    bySymbol[symbol].push({
+      generatedAtRaw: row[index.generatedAt],
+      generatedAt,
+      symbol,
+      name: String(row[index.name] || ''),
+      lastPrice: Number(row[index.lastPrice] || 0),
+      fairValue: Number(row[index.fairValue] || 0),
+      intradayTarget: Number(row[index.intradayTarget] || 0),
+      downsideRisk: Number(row[index.downsideRisk] || 0),
+      upsidePct: Number(row[index.upsidePct] || 0),
+      confidence: Number(row[index.confidence] || 0),
+      rating: String(row[index.rating] || ''),
+      limitUpPlan: String(row[index.limitUpPlan] || ''),
+      valuationReasoning: String(row[index.valuationReasoning] || '')
+    });
   });
 
-  Object.keys(latest).forEach(symbol => {
-    delete latest[symbol].generatedAtRaw;
+  const latest = {};
+  Object.keys(bySymbol).forEach(symbol => {
+    const history = bySymbol[symbol].sort((left, right) => left.generatedAt.getTime() - right.generatedAt.getTime());
+    const current = history[history.length - 1];
+    current.history = history.map(item => ({
+      generatedAt: Utilities.formatDate(item.generatedAt, DEAN_BACKTEST_CONFIG.timezone, 'yyyy-MM-dd HH:mm:ss'),
+      fairValue: item.fairValue,
+      intradayTarget: item.intradayTarget,
+      upsidePct: item.upsidePct,
+      confidence: item.confidence,
+      rating: item.rating
+    }));
+    current.trend = buildDeanValuationTrend_(history);
+    delete current.generatedAtRaw;
+    latest[symbol] = current;
   });
   return latest;
 }
 
-function compareDeanValuationGeneratedAt_(left, right) {
-  const leftTime = Object.prototype.toString.call(left) === '[object Date]' ? left.getTime() : new Date(left).getTime();
-  const rightTime = Object.prototype.toString.call(right) === '[object Date]' ? right.getTime() : new Date(right).getTime();
-  if (!isNaN(leftTime) && !isNaN(rightTime)) {
-    return leftTime - rightTime;
+function buildDeanValuationTrend_(history) {
+  if (!history.length) {
+    return {
+      historyCount: 0,
+      fairValueTrendPct: 0,
+      upsideTrendPct: 0,
+      confidenceTrend: 0,
+      averageConfidence: 0,
+      averageUpsidePct: 0
+    };
   }
-  return String(left || '').localeCompare(String(right || ''));
+  const first = history[0];
+  const last = history[history.length - 1];
+  return {
+    historyCount: history.length,
+    fairValueTrendPct: first.fairValue ? pctChange_(last.fairValue, first.fairValue) : 0,
+    upsideTrendPct: last.upsidePct - first.upsidePct,
+    confidenceTrend: last.confidence - first.confidence,
+    averageConfidence: sum_(history.map(item => item.confidence)) / history.length,
+    averageUpsidePct: sum_(history.map(item => item.upsidePct)) / history.length
+  };
+}
+
+function normalizeDeanValuationDate_(value) {
+  if (Object.prototype.toString.call(value) === '[object Date]' && !isNaN(value.getTime())) {
+    return value;
+  }
+  const parsed = new Date(value);
+  return isNaN(parsed.getTime()) ? null : parsed;
 }
 
 function getDeanRatingRank_(rating) {
