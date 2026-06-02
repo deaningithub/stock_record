@@ -39,12 +39,13 @@ const DEAN_AUTOSTOCK_CONFIG = {
         maxBreadthBonus: 0.15
       },
       exit: {
-        takeProfitPct: 0.5,
+        takeProfitPct: 3.0,
         stopLossPct: 0.3,
-        maxHoldingSeconds: 300,
+        maxHoldingSeconds: 3600,
         forceExitTime: '13:25',
-        imbalanceReversalAfterSeconds: 30,
-        imbalanceReversalBelow: 0.5
+        nearLimitUpHoldPct: 8.5,
+        imbalanceReversalAfterSeconds: 300,
+        imbalanceReversalBelow: 0.35
       },
       risk: {
         paperQuantityLots: 1,
@@ -76,7 +77,8 @@ const DEAN_AUTOSTOCK_CONFIG = {
       exit: {
         supportBreakPct: 1.5,
         forceExitTime: '13:20',
-        imbalanceProfitExitBelow: 0.35
+        nearLimitUpHoldPct: 8.5,
+        imbalanceProfitExitBelow: 0.25
       },
       risk: {
         budgetTwd: 500000,
@@ -103,7 +105,8 @@ const DEAN_AUTOSTOCK_CONFIG = {
       exit: {
         takeProfitDailyChangePct: 9.9,
         stopLossDailyChangePct: -2.0,
-        forceExitTime: '13:20'
+        forceExitTime: '13:20',
+        holdNearLimitUp: true
       },
       risk: {
         budgetTwd: 500000,

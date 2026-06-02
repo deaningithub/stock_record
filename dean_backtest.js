@@ -182,6 +182,12 @@ function shouldDeanEnter_(strategy, context, bar, index) {
 
 function getDeanIntradayExitReason_(strategy, position, bar, context) {
   if (strategy.type === 'ai_rotation') {
+    if (isDeanNearLimitUpHold_(strategy, bar)) {
+      if (bar.minuteOfDay >= timeToMinutes_(strategy.exit.forceExitTime)) {
+        return 'near_limit_up_eod';
+      }
+      return '';
+    }
     if (bar.bestBid >= position.entryPrice * (1 + strategy.exit.takeProfitPct / 100)) {
       return 'take_profit';
     }
@@ -200,6 +206,12 @@ function getDeanIntradayExitReason_(strategy, position, bar, context) {
     }
   }
   if (strategy.type === 'theme_stock') {
+    if (isDeanNearLimitUpHold_(strategy, bar)) {
+      if (bar.minuteOfDay >= timeToMinutes_(strategy.exit.forceExitTime)) {
+        return 'near_limit_up_eod';
+      }
+      return '';
+    }
     if (bar.close >= position.meta.targetPrice) {
       return 'target_resistance';
     }
@@ -215,7 +227,10 @@ function getDeanIntradayExitReason_(strategy, position, bar, context) {
   }
   if (strategy.type === 'limit_up') {
     if (bar.dailyChangePct >= strategy.exit.takeProfitDailyChangePct) {
-      return 'near_limit_up';
+      if (strategy.exit.holdNearLimitUp && bar.minuteOfDay < timeToMinutes_(strategy.exit.forceExitTime)) {
+        return '';
+      }
+      return 'near_limit_up_eod';
     }
     if (bar.dailyChangePct <= strategy.exit.stopLossDailyChangePct) {
       return 'momentum_reversal';
@@ -225,6 +240,12 @@ function getDeanIntradayExitReason_(strategy, position, bar, context) {
     }
   }
   return '';
+}
+
+function isDeanNearLimitUpHold_(strategy, bar) {
+  return strategy.exit &&
+    strategy.exit.nearLimitUpHoldPct !== undefined &&
+    bar.dailyChangePct >= strategy.exit.nearLimitUpHoldPct;
 }
 
 function runDeanLimitUpSwing_(strategy, dayContexts) {
