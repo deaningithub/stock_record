@@ -1,0 +1,12 @@
+{
+  "id": "dean_risk",
+  "name": "CommonRiskManager",
+  "dryRun": true,
+  "maxOrderValueTwd": 50000,
+  "maxDailyOrderValueTwd": 200000,
+  "maxQuantity": 1000,
+  "maxLiveQuantityLots": 1,
+  "allowMarketOrder": false,
+  "allowMargin": false,
+  "validateInBacktest": false
+}

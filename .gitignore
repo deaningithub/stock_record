@@ -1,0 +1,30 @@
+# Runtime market data and exports
+*.xlsx
+*.xls
+*.csv
+*.tsv
+*.parquet
+*.feather
+*.jsonl
+data/
+Data/
+exports/
+reports/
+
+# Temporary Excel inspection files
+.xlsx_inspect/
+.xlsx_inspect.zip
+
+# Logs and local runtime state
+*.log
+.DS_Store
+Thumbs.db
+
+# Dependencies and generated build folders
+node_modules/
+dist/
+build/
+
+# Local environment
+.env
+.env.*

@@ -1,0 +1,29 @@
+{
+  "id": "dean_limit_up_swing",
+  "name": "LimitUpSwingStrategy",
+  "enabled": true,
+  "candidate": {
+    "day1CloseChangePct": 9.7
+  },
+  "entry": {
+    "nextDayOpenWindowMinutes": 15,
+    "maxOpenDropPct": 2.0,
+    "minBookImbalance": 0.5,
+    "budgetTwd": 500000,
+    "requireFundamental": false
+  },
+  "exit": {
+    "maxDaysFromLimitUp": 3,
+    "day3OpenExit": true,
+    "momentumBreakOpenDropPct": 1.5,
+    "trailingStopPct": 3.0,
+    "entryDayStopPct": 2.0,
+    "forceExitTime": "13:20"
+  },
+  "risk": {
+    "lotSize": 1000,
+    "feeRatePct": 0.1425,
+    "taxRatePct": 0.3,
+    "slippagePct": 0.05
+  }
+}

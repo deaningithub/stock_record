@@ -1,0 +1,31 @@
+{
+  "id": "dean_theme_stock",
+  "name": "ThemeStockStrategy",
+  "enabled": true,
+  "entry": {
+    "supportTolerancePct": 0.8,
+    "volumeMultiplier": 1.5,
+    "minBookImbalance": 0.55,
+    "openDelayMinutes": 3,
+    "maxConcurrentPositions": 3,
+    "maxDailyEntriesPerSymbol": 2,
+    "minRewardRisk": 1.5,
+    "defaultTargetPct": 3.0
+  },
+  "levels": {
+    "defaultSupportLookbackBars": 30,
+    "defaultResistanceLookbackBars": 60
+  },
+  "exit": {
+    "supportBreakPct": 1.5,
+    "forceExitTime": "13:20",
+    "imbalanceProfitExitBelow": 0.35
+  },
+  "risk": {
+    "budgetTwd": 500000,
+    "lotSize": 1000,
+    "feeRatePct": 0.1425,
+    "taxRatePct": 0.3,
+    "slippagePct": 0.05
+  }
+}

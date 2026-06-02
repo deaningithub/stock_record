@@ -1,0 +1,27 @@
+{
+  "id": "dip_reversal",
+  "name": "Intraday Dip Reversal",
+  "enabled": true,
+  "description": "Buy rebound after an intraday dip from the morning high.",
+  "entry": {
+    "type": "dip_reversal",
+    "startTime": "09:20",
+    "endTime": "12:45",
+    "dipFromHighPct": 1.4,
+    "reboundPct": 0.4,
+    "volumeLookback": 10,
+    "volumeMultiplier": 1.1
+  },
+  "exit": {
+    "stopLossPct": 0.9,
+    "takeProfitPct": 1.6,
+    "maxHoldingMinutes": 90,
+    "forceExitTime": "13:20"
+  },
+  "risk": {
+    "capitalPerTrade": 100000,
+    "feeRatePct": 0.1425,
+    "taxRatePct": 0.3,
+    "slippagePct": 0.05
+  }
+}

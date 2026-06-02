@@ -1,0 +1,22 @@
+{
+  "id": "dean_taiwan_bull",
+  "name": "TaiwanBullStrategy",
+  "enabled": true,
+  "capitalTwd": 2000000,
+  "core": {
+    "strategyRef": "dean_fundamental_momentum",
+    "capitalRatio": 0.6,
+    "minConfidence": 7,
+    "maxConcurrentPositions": 4
+  },
+  "tactical": {
+    "strategyRef": "dean_limit_up_swing",
+    "capitalRatio": 0.4,
+    "budgetPerTradeTwd": 500000,
+    "maxConcurrentPositions": 2,
+    "maxHoldingDays": 3
+  },
+  "conflict": {
+    "skipTacticalIfCoreHeld": true
+  }
+}

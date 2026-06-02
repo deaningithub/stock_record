@@ -1,0 +1,26 @@
+{
+  "id": "dean_limit_up",
+  "name": "LimitUpStrategy",
+  "enabled": true,
+  "entry": {
+    "minDailyChangePct": 2.0,
+    "maxDailyChangePct": 9.9,
+    "volumeMultiplier": 1.5,
+    "minBookImbalance": 0.55,
+    "openDelayMinutes": 3,
+    "maxConcurrentPositions": 5,
+    "maxDailyEntriesPerSymbol": 1
+  },
+  "exit": {
+    "takeProfitDailyChangePct": 9.9,
+    "stopLossDailyChangePct": -2.0,
+    "forceExitTime": "13:20"
+  },
+  "risk": {
+    "budgetTwd": 500000,
+    "lotSize": 1000,
+    "feeRatePct": 0.1425,
+    "taxRatePct": 0.3,
+    "slippagePct": 0.05
+  }
+}

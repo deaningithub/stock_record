@@ -1,0 +1,27 @@
+{
+  "id": "vwap_momentum",
+  "name": "VWAP Momentum",
+  "enabled": true,
+  "description": "Buy when close reclaims VWAP with stronger-than-recent volume.",
+  "entry": {
+    "type": "vwap_momentum",
+    "startTime": "09:10",
+    "endTime": "12:30",
+    "volumeLookback": 8,
+    "volumeMultiplier": 1.3,
+    "minPriceAboveVwapPct": 0.05
+  },
+  "exit": {
+    "stopLossPct": 1.0,
+    "takeProfitPct": 2.0,
+    "trailingStopPct": 0.9,
+    "maxHoldingMinutes": 150,
+    "forceExitTime": "13:20"
+  },
+  "risk": {
+    "capitalPerTrade": 100000,
+    "feeRatePct": 0.1425,
+    "taxRatePct": 0.3,
+    "slippagePct": 0.05
+  }
+}

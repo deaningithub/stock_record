@@ -1,0 +1,27 @@
+{
+  "id": "opening_range_breakout",
+  "name": "Opening Range Breakout",
+  "enabled": true,
+  "description": "Buy when price breaks the first 5-minute high with volume confirmation.",
+  "entry": {
+    "type": "opening_range_breakout",
+    "rangeMinutes": 5,
+    "startTime": "09:05",
+    "endTime": "11:00",
+    "breakoutBufferPct": 0.15,
+    "volumeLookback": 5,
+    "volumeMultiplier": 1.5
+  },
+  "exit": {
+    "stopLossPct": 1.2,
+    "takeProfitPct": 2.4,
+    "maxHoldingMinutes": 120,
+    "forceExitTime": "13:20"
+  },
+  "risk": {
+    "capitalPerTrade": 100000,
+    "feeRatePct": 0.1425,
+    "taxRatePct": 0.3,
+    "slippagePct": 0.05
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "id": "dean_ai_rotation",
+  "name": "AISpeculativeRotationStrategy",
+  "enabled": true,
+  "mode": "paper_trade",
+  "featureProxy": true,
+  "entry": {
+    "minSymbolScore": 0.65,
+    "minThemeScore": 0.45,
+    "minBookImbalance": 0.65,
+    "maxSpreadPct": 1.0,
+    "minTradeVolume": 1,
+    "openDelayMinutes": 3,
+    "maxConcurrentPositions": 5,
+    "cooldownSeconds": 30,
+    "maxDailyEntriesPerSymbol": 3
+  },
+  "scoreWeights": {
+    "bookImbalance": 0.45,
+    "microPriceAboveMidpoint": 0.2,
+    "spreadTight": 0.15,
+    "aboveShortVwap": 0.1,
+    "hasRecentVolume": 0.1
+  },
+  "theme": {
+    "breadthScoreThreshold": 0.6,
+    "maxBreadthBonus": 0.15
+  },
+  "exit": {
+    "takeProfitPct": 0.5,
+    "stopLossPct": 0.3,
+    "maxHoldingSeconds": 300,
+    "forceExitTime": "13:25",
+    "imbalanceReversalAfterSeconds": 30,
+    "imbalanceReversalBelow": 0.5
+  },
+  "risk": {
+    "paperQuantityLots": 1,
+    "lotSize": 1000,
+    "feeRatePct": 0.1425,
+    "taxRatePct": 0.3,
+    "slippagePct": 0.05
+  }
+}

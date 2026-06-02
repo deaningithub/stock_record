@@ -1,0 +1,33 @@
+{
+  "id": "dean_fundamental_momentum",
+  "name": "FundamentalMomentumStrategy",
+  "enabled": true,
+  "entry": {
+    "entryTolerancePct": 1.5,
+    "directionLookbackBars": 15,
+    "volumeMultiplier": 1.2,
+    "minBookImbalance": 0.52,
+    "minRemainingUpsidePct": 8.0,
+    "minConfidence": 5,
+    "openDelayMinutes": 5,
+    "maxDailyEntriesPerSymbol": 1
+  },
+  "confidenceTable": [
+    { "min": 9, "maxHoldingDays": 90, "stopLossPct": 8.0, "positionRatio": 1.0 },
+    { "min": 7, "maxHoldingDays": 60, "stopLossPct": 5.0, "positionRatio": 0.8 },
+    { "min": 5, "maxHoldingDays": 30, "stopLossPct": 3.0, "positionRatio": 0.6 },
+    { "min": 1, "maxHoldingDays": 14, "stopLossPct": 2.0, "positionRatio": 0.4 }
+  ],
+  "valuation": {
+    "defaultConfidence": 7,
+    "defaultEntryPriceSource": "first_close",
+    "defaultTargetUpsidePct": 12.0
+  },
+  "risk": {
+    "baseBudgetTwd": 500000,
+    "lotSize": 1000,
+    "feeRatePct": 0.1425,
+    "taxRatePct": 0.3,
+    "slippagePct": 0.05
+  }
+}
