@@ -5,6 +5,7 @@ const TRIGGER_CONFIG = {
   minuteBackfillHandlerName: 'continueMinuteReplayBackfill',
   gasRealtimeHandlerName: 'collectGasRealtimeSnapshots',
   aiValuationHandlerName: 'recalculateAiValuationsAtOpen',
+  badNewsHandlerName: 'monitorBadNewsSignals',
   defaultIntervalDays: 1,
   minIntervalDays: 1,
   maxIntervalDays: 5,
@@ -71,6 +72,16 @@ function installAiValuationTriggerAt9() {
     .create();
 
   log_('INFO', 'Installed AI valuation trigger near 09:00 Asia/Taipei every day. The handler skips weekends.');
+}
+
+function installBadNewsMonitorTrigger() {
+  removeTriggersFor_(TRIGGER_CONFIG.badNewsHandlerName);
+  ScriptApp.newTrigger(TRIGGER_CONFIG.badNewsHandlerName)
+    .timeBased()
+    .everyMinutes(15)
+    .create();
+
+  log_('INFO', 'Installed bad-news monitor trigger every 15 minutes. The handler skips outside 08:00-14:00 Asia/Taipei weekdays.');
 }
 
 function installAfterCloseMinuteReplayTrigger() {

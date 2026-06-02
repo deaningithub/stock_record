@@ -54,6 +54,7 @@ function onOpen() {
     .addItem('Record minute replay candles', 'recordMinuteReplayCandles')
     .addItem('Record latest daily candles', 'recordLatestDailyCandles')
     .addItem('Recalculate AI valuations', 'recalculateAiValuationsAtOpen')
+    .addItem('Monitor bad-news signals', 'monitorBadNewsSignals')
     .addSeparator()
     .addItem('Start 60-day minute backfill', 'startMinuteReplayBackfill60Days')
     .addItem('Continue minute backfill now', 'continueMinuteReplayBackfill')
@@ -78,6 +79,7 @@ function onOpen() {
     .addItem('Install stock trigger: every 5 days', 'installRecordTriggerEvery5Days')
     .addItem('Install GAS realtime snapshot trigger', 'installGasRealtimeSnapshotTrigger')
     .addItem('Install AI valuation trigger: 09:00', 'installAiValuationTriggerAt9')
+    .addItem('Install bad-news monitor trigger', 'installBadNewsMonitorTrigger')
     .addItem('Install minute replay trigger: every 1 minute', 'installMinuteReplayTriggerEvery1Minute')
     .addItem('Install minute replay trigger: every 5 minutes', 'installMinuteReplayTriggerEvery5Minutes')
     .addItem('Install after-close minute replay trigger', 'installAfterCloseMinuteReplayTrigger')
@@ -94,6 +96,7 @@ function setupSheets() {
   const minuteReplaySheet = getOrCreateSheet_(spreadsheet, CONFIG.minuteReplaySheetName);
   const logSheet = getOrCreateSheet_(spreadsheet, CONFIG.logSheetName);
   const aiValuationSheet = getOrCreateSheet_(spreadsheet, AI_VALUATION_CONFIG.sheetName);
+  const badNewsSheet = getOrCreateSheet_(spreadsheet, BAD_NEWS_CONFIG.sheetName);
 
   setHeader_(configSheet, ['symbol', 'enabled', 'name', 'themes', 'note']);
   syncWatchlistRows_(configSheet);
@@ -147,6 +150,7 @@ function setupSheets() {
 
   setHeader_(logSheet, ['time', 'level', 'message']);
   setHeader_(aiValuationSheet, getAiValuationHeaders_());
+  setHeader_(badNewsSheet, getBadNewsMonitorHeaders_());
   spreadsheet.toast('Taiwan stock recorder sheets are ready.', 'Setup complete', 5);
 }
 

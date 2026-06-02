@@ -148,6 +148,9 @@ function shouldDeanEnter_(strategy, context, bar, index) {
   if (bar.minuteOfDay < timeToMinutes_(DEAN_BACKTEST_CONFIG.openTime) + (strategy.entry.openDelayMinutes || 0)) {
     return false;
   }
+  if (isDeanBadNewsEntryBlocked_(bar)) {
+    return false;
+  }
   if (!passesDeanValuationGate_(strategy, bar)) {
     return false;
   }
@@ -194,6 +197,9 @@ function shouldDeanEnter_(strategy, context, bar, index) {
 }
 
 function getDeanIntradayExitReason_(strategy, position, bar, context) {
+  if (isDeanBadNewsForceExit_(bar)) {
+    return 'bad_news_force_exit';
+  }
   if (strategy.type === 'ai_rotation') {
     if (isDeanNearLimitUpHold_(strategy, bar)) {
       if (bar.minuteOfDay >= timeToMinutes_(strategy.exit.forceExitTime)) {
@@ -487,6 +493,7 @@ function findDeanFundamentalExit_(strategy, position, holdingDays) {
 function buildDeanDayContexts_(barsBySymbolDate) {
   const contexts = {};
   const valuations = loadDeanAiValuationsWithHistory_(DEAN_BACKTEST_CONFIG.valuationHistoryDays);
+  const badNewsSignals = loadLatestDeanBadNewsSignals_();
   Object.keys(barsBySymbolDate).sort().forEach(key => {
     const bars = barsBySymbolDate[key];
     if (!bars.length) {
@@ -499,6 +506,7 @@ function buildDeanDayContexts_(barsBySymbolDate) {
       tradeDate: bars[0].tradeDate,
       bars,
       valuation: valuations[bars[0].symbol] || null,
+      badNewsSignal: badNewsSignals[bars[0].symbol] || null,
       open: bars[0].open,
       close: bars[bars.length - 1].close,
       high: Math.max.apply(null, bars.map(bar => bar.high)),
@@ -508,6 +516,7 @@ function buildDeanDayContexts_(barsBySymbolDate) {
     context.bars.forEach(bar => {
       bar.__contextBars = context.bars;
       bar.valuation = context.valuation;
+      bar.badNewsSignal = context.badNewsSignal;
     });
     contexts[key] = context;
   });
@@ -555,6 +564,26 @@ function calculateDeanValuationScore_(strategy, bar) {
   const upsideScore = clamp_(bar.valuation.upsidePct / 15, 0, 1);
   const ratingScore = clamp_(getDeanRatingRank_(bar.valuation.rating) / 4, 0, 1);
   return clamp_(confidenceScore * 0.4 + upsideScore * 0.4 + ratingScore * 0.2, 0, 1);
+}
+
+function isDeanBadNewsEntryBlocked_(bar) {
+  const signal = bar.badNewsSignal;
+  if (!signal) {
+    return false;
+  }
+  return signal.shouldBlockEntry === true ||
+    signal.riskScore >= BAD_NEWS_CONFIG.blockEntryRiskScore ||
+    getBadNewsSeverityRank_(signal.severity) >= BAD_NEWS_CONFIG.severityRanks.high;
+}
+
+function isDeanBadNewsForceExit_(bar) {
+  const signal = bar.badNewsSignal;
+  if (!signal) {
+    return false;
+  }
+  return signal.shouldForceExit === true ||
+    signal.riskScore >= BAD_NEWS_CONFIG.forceExitRiskScore ||
+    getBadNewsSeverityRank_(signal.severity) >= BAD_NEWS_CONFIG.severityRanks.critical;
 }
 
 function calculateDeanValuationTrendScore_(valuation) {
@@ -820,6 +849,51 @@ function loadDeanAiValuationsWithHistory_(lookbackDays) {
     latest[symbol] = current;
   });
   return latest;
+}
+
+function loadLatestDeanBadNewsSignals_() {
+  const sheet = getOrCreateSheet_(getSpreadsheet_(), BAD_NEWS_CONFIG.sheetName);
+  const values = sheet.getDataRange().getValues();
+  if (values.length < 2) {
+    return {};
+  }
+
+  const headers = values[0].map(value => String(value));
+  const index = {};
+  headers.forEach((header, columnIndex) => {
+    index[header] = columnIndex;
+  });
+  if (index.symbol === undefined || index.generatedAt === undefined) {
+    return {};
+  }
+
+  const latest = {};
+  values.slice(1).forEach(row => {
+    const symbol = normalizeSymbol_(row[index.symbol]);
+    const generatedAt = normalizeDeanValuationDate_(row[index.generatedAt]);
+    if (!symbol || !generatedAt) {
+      return;
+    }
+    const current = latest[symbol];
+    if (!current || generatedAt.getTime() >= current.generatedAt.getTime()) {
+      latest[symbol] = {
+        generatedAt,
+        symbol,
+        riskScore: Number(row[index.riskScore] || 0),
+        severity: String(row[index.severity] || 'none'),
+        riskType: String(row[index.riskType] || ''),
+        shouldBlockEntry: row[index.shouldBlockEntry] === true || String(row[index.shouldBlockEntry]).toLowerCase() === 'true',
+        shouldForceExit: row[index.shouldForceExit] === true || String(row[index.shouldForceExit]).toLowerCase() === 'true',
+        headlineSummary: String(row[index.headlineSummary] || ''),
+        reasoning: String(row[index.reasoning] || '')
+      };
+    }
+  });
+  return latest;
+}
+
+function getBadNewsSeverityRank_(severity) {
+  return BAD_NEWS_CONFIG.severityRanks[String(severity || '').toLowerCase()] || 0;
 }
 
 function buildDeanValuationTrend_(history) {

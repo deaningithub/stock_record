@@ -13,6 +13,7 @@ This repository contains the Apps Script source code and strategy configuration 
 | `Code.js` | Main Apps Script entry point. Sets sheet names, watchlist defaults, Fugle API access, setup helpers, quote collection, daily candle collection, minute replay collection, backfill flow, logging, and shared utilities. |
 | `trigger.js` | Installs and removes Apps Script time-based triggers for daily stock recording, minute replay collection, realtime snapshots, after-close collection, and minute backfill continuation. |
 | `ai_valuation.js` | Recalculates morning AI valuations for enabled watchlist stocks using local sheet data, the prior 7 days of valuation history, and OpenAI web search for current Taiwan news, US market context, and catalyst reasoning. |
+| `bad_news_monitor.js` | Monitors current negative news, disclosures, downgrades, macro shocks, and US-market read-through, then writes risk signals to `BadNewsMonitor` for strategy risk controls. |
 | `realtime_gas.js` | Collects realtime Fugle intraday quote snapshots and writes quote-derived features such as bid/ask, midpoint, spread percentage, book imbalance, micro price, trade volume, and last trade metadata. |
 | `strategies.js` | Defines baseline intraday backtest strategies, including opening range breakout, VWAP momentum, and dip reversal. |
 | `backtest.js` | Runs baseline strategy backtests against `MinuteReplay` data, simulates entries/exits, calculates costs, and writes trades to `BacktestTrades`. |
@@ -37,6 +38,7 @@ The code expects these Google Sheets tabs:
 | `DeanBacktestTrades` | Output trades for Dean autostock strategies. |
 | `DeanBacktestReport` | Summary report for Dean autostock strategies. |
 | `AIValuations` | Daily AI fair-value and intraday target estimates with news, US-market impact, limit-up plan, confidence, sources, and 7-day trend context for later strategy decisions. |
+| `BadNewsMonitor` | Dedicated negative-news monitor output. High-risk rows block new entries, and critical rows can force exits. |
 | `RunLog` | Runtime logs and API errors. |
 
 ## Setup
@@ -92,6 +94,7 @@ The code expects these Google Sheets tabs:
 | `recordMinuteReplayCandles()` | Appends current one-minute candle data into `MinuteReplay`. |
 | `recordTodayMinuteReplayCandlesAfterClose()` | Captures the current trading day's minute candles after close. |
 | `recalculateAiValuationsAtOpen()` | Uses OpenAI Responses API with web search to recalculate AI valuations for the enabled watchlist. |
+| `monitorBadNewsSignals()` | Uses OpenAI Responses API with web search to detect bad-news signals and write `BadNewsMonitor`. |
 | `startMinuteReplayBackfill60Days()` | Starts a 60-day minute replay backfill workflow. |
 | `continueMinuteReplayBackfill()` | Continues the backfill batch. |
 | `runAllStrategyBacktests()` | Runs all baseline backtests. |
@@ -108,6 +111,7 @@ Use the menu or run these functions manually:
 | `installRecordTriggerEvery1Day()` | Daily stock quote/daily candle recording. |
 | `installGasRealtimeSnapshotTrigger()` | Realtime feature collection every minute, with market-hour guard. |
 | `installAiValuationTriggerAt9()` | Daily AI valuation recalculation near 09:00 Asia/Taipei, with weekend guard. |
+| `installBadNewsMonitorTrigger()` | Bad-news monitor every 15 minutes, with 08:00-14:00 Asia/Taipei weekday guard. |
 | `installMinuteReplayTriggerEvery1Minute()` | Minute replay collection every minute, with market-hour guard. |
 | `installMinuteReplayTriggerEvery5Minutes()` | Minute replay collection every five minutes. |
 | `installAfterCloseMinuteReplayTrigger()` | After-close minute replay capture near 14:30 Asia/Taipei. |
