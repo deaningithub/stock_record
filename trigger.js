@@ -4,6 +4,7 @@ const TRIGGER_CONFIG = {
   afterCloseMinuteReplayHandlerName: 'recordTodayMinuteReplayCandlesAfterClose',
   minuteBackfillHandlerName: 'continueMinuteReplayBackfill',
   gasRealtimeHandlerName: 'collectGasRealtimeSnapshots',
+  aiValuationHandlerName: 'recalculateAiValuationsAtOpen',
   defaultIntervalDays: 1,
   minIntervalDays: 1,
   maxIntervalDays: 5,
@@ -57,6 +58,19 @@ function installGasRealtimeSnapshotTrigger() {
     .create();
 
   log_('INFO', 'Installed GAS realtime snapshot trigger every 1 minute. The handler skips outside Taiwan market hours.');
+}
+
+function installAiValuationTriggerAt9() {
+  removeTriggersFor_(TRIGGER_CONFIG.aiValuationHandlerName);
+  ScriptApp.newTrigger(TRIGGER_CONFIG.aiValuationHandlerName)
+    .timeBased()
+    .atHour(9)
+    .nearMinute(0)
+    .everyDays(1)
+    .inTimezone(TRIGGER_CONFIG.timezone)
+    .create();
+
+  log_('INFO', 'Installed AI valuation trigger near 09:00 Asia/Taipei every day. The handler skips weekends.');
 }
 
 function installAfterCloseMinuteReplayTrigger() {
