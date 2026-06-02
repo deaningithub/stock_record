@@ -147,10 +147,15 @@ function shouldDeanEnter_(strategy, context, bar, index) {
   if (bar.minuteOfDay < timeToMinutes_(DEAN_BACKTEST_CONFIG.openTime) + (strategy.entry.openDelayMinutes || 0)) {
     return false;
   }
+  if (!passesDeanValuationGate_(strategy, bar)) {
+    return false;
+  }
   if (strategy.type === 'ai_rotation') {
     const symbolScore = calculateDeanRotationScore_(strategy, bar);
     const themeScore = calculateDeanThemeScore_(strategy, context, bar);
-    return symbolScore >= strategy.entry.minSymbolScore &&
+    const valuationScore = calculateDeanValuationScore_(strategy, bar);
+    const adjustedSymbolScore = clamp_(symbolScore + valuationScore * (strategy.valuation.scoreBonus || 0), 0, 1);
+    return adjustedSymbolScore >= strategy.entry.minSymbolScore &&
       themeScore >= strategy.entry.minThemeScore &&
       bar.bookImbalance >= strategy.entry.minBookImbalance &&
       bar.spreadPct <= strategy.entry.maxSpreadPct &&
@@ -188,11 +193,17 @@ function getDeanIntradayExitReason_(strategy, position, bar, context) {
       }
       return '';
     }
-    if (bar.bestBid >= position.entryPrice * (1 + strategy.exit.takeProfitPct / 100)) {
-      return 'take_profit';
-    }
     if (bar.bestBid <= position.entryPrice * (1 - strategy.exit.stopLossPct / 100)) {
       return 'stop_loss';
+    }
+    if (isDeanStrongValuationHold_(strategy, bar)) {
+      if (bar.minuteOfDay >= timeToMinutes_(strategy.exit.forceExitTime)) {
+        return 'valuation_hold_eod';
+      }
+      return '';
+    }
+    if (bar.bestBid >= position.entryPrice * (1 + strategy.exit.takeProfitPct / 100)) {
+      return 'take_profit';
     }
     if ((bar.timestamp.getTime() - position.entryTimestamp.getTime()) / 1000 >= strategy.exit.maxHoldingSeconds) {
       return 'timeout';
@@ -212,11 +223,17 @@ function getDeanIntradayExitReason_(strategy, position, bar, context) {
       }
       return '';
     }
-    if (bar.close >= position.meta.targetPrice) {
-      return 'target_resistance';
-    }
     if (bar.close <= position.meta.stopPrice) {
       return 'support_break';
+    }
+    if (isDeanStrongValuationHold_(strategy, bar)) {
+      if (bar.minuteOfDay >= timeToMinutes_(strategy.exit.forceExitTime)) {
+        return 'valuation_hold_eod';
+      }
+      return '';
+    }
+    if (bar.close >= position.meta.targetPrice) {
+      return 'target_resistance';
     }
     if (bar.minuteOfDay >= timeToMinutes_(strategy.exit.forceExitTime)) {
       return 'eod_force_exit';
@@ -226,6 +243,9 @@ function getDeanIntradayExitReason_(strategy, position, bar, context) {
     }
   }
   if (strategy.type === 'limit_up') {
+    if (isDeanStrongValuationHold_(strategy, bar) && bar.minuteOfDay < timeToMinutes_(strategy.exit.forceExitTime)) {
+      return '';
+    }
     if (bar.dailyChangePct >= strategy.exit.takeProfitDailyChangePct) {
       if (strategy.exit.holdNearLimitUp && bar.minuteOfDay < timeToMinutes_(strategy.exit.forceExitTime)) {
         return '';
@@ -246,6 +266,31 @@ function isDeanNearLimitUpHold_(strategy, bar) {
   return strategy.exit &&
     strategy.exit.nearLimitUpHoldPct !== undefined &&
     bar.dailyChangePct >= strategy.exit.nearLimitUpHoldPct;
+}
+
+function passesDeanValuationGate_(strategy, bar) {
+  const config = strategy.valuation;
+  if (!config || !config.requireAiValuation) {
+    return true;
+  }
+  const valuation = bar.valuation;
+  if (!valuation) {
+    return false;
+  }
+  return valuation.confidence >= (config.minConfidence || 0) &&
+    valuation.upsidePct >= (config.minUpsidePct || 0) &&
+    getDeanRatingRank_(valuation.rating) >= (config.minRatingRank || 0);
+}
+
+function isDeanStrongValuationHold_(strategy, bar) {
+  const config = strategy.valuation;
+  const valuation = bar.valuation;
+  if (!config || !valuation) {
+    return false;
+  }
+  return valuation.confidence >= (config.strongHoldConfidence || 999) &&
+    valuation.upsidePct >= (config.strongHoldUpsidePct || 999) &&
+    getDeanRatingRank_(valuation.rating) >= 2;
 }
 
 function runDeanLimitUpSwing_(strategy, dayContexts) {
@@ -431,6 +476,7 @@ function findDeanFundamentalExit_(strategy, position, holdingDays) {
 
 function buildDeanDayContexts_(barsBySymbolDate) {
   const contexts = {};
+  const valuations = loadLatestDeanAiValuations_();
   Object.keys(barsBySymbolDate).sort().forEach(key => {
     const bars = barsBySymbolDate[key];
     if (!bars.length) {
@@ -442,6 +488,7 @@ function buildDeanDayContexts_(barsBySymbolDate) {
       symbol: bars[0].symbol,
       tradeDate: bars[0].tradeDate,
       bars,
+      valuation: valuations[bars[0].symbol] || null,
       open: bars[0].open,
       close: bars[bars.length - 1].close,
       high: Math.max.apply(null, bars.map(bar => bar.high)),
@@ -450,6 +497,7 @@ function buildDeanDayContexts_(barsBySymbolDate) {
     enrichDeanFeatureProxies_(context);
     context.bars.forEach(bar => {
       bar.__contextBars = context.bars;
+      bar.valuation = context.valuation;
     });
     contexts[key] = context;
   });
@@ -487,6 +535,16 @@ function calculateDeanRotationScore_(strategy, bar) {
     0,
     1
   );
+}
+
+function calculateDeanValuationScore_(strategy, bar) {
+  if (!bar.valuation) {
+    return 0;
+  }
+  const confidenceScore = clamp_(bar.valuation.confidence / 10, 0, 1);
+  const upsideScore = clamp_(bar.valuation.upsidePct / 15, 0, 1);
+  const ratingScore = clamp_(getDeanRatingRank_(bar.valuation.rating) / 4, 0, 1);
+  return clamp_(confidenceScore * 0.4 + upsideScore * 0.4 + ratingScore * 0.2, 0, 1);
 }
 
 function calculateDeanThemeScore_(strategy, context, bar) {
@@ -574,7 +632,7 @@ function closeDeanTrade_(strategy, position, bar, exitReason) {
     cost: buyAmount + buyFee,
     proceeds: sellAmount - sellFee - tax,
     generatedAt: new Date(),
-    featureMode: 'minute_bar_proxy'
+    featureMode: bar.valuation ? 'minute_bar_proxy_ai_valuation' : 'minute_bar_proxy'
   };
 }
 
@@ -649,11 +707,88 @@ function groupDeanContextsBySymbol_(dayContexts) {
 
 function buildProxyValuation_(strategy, days) {
   const firstClose = days[0].close;
+  const aiValuation = days[0].valuation;
+  if (strategy.valuation.preferAiValuation && aiValuation) {
+    const entryPrice = aiValuation.downsideRisk || aiValuation.lastPrice || firstClose;
+    const targetPrice = aiValuation.fairValue || aiValuation.intradayTarget || firstClose * (1 + strategy.valuation.defaultTargetUpsidePct / 100);
+    return {
+      entryPrice,
+      targetPrice,
+      confidence: aiValuation.confidence || strategy.valuation.defaultConfidence
+    };
+  }
   return {
     entryPrice: firstClose,
     targetPrice: firstClose * (1 + strategy.valuation.defaultTargetUpsidePct / 100),
     confidence: strategy.valuation.defaultConfidence
   };
+}
+
+function loadLatestDeanAiValuations_() {
+  const sheet = getOrCreateSheet_(getSpreadsheet_(), AI_VALUATION_CONFIG.sheetName);
+  const values = sheet.getDataRange().getValues();
+  if (values.length < 2) {
+    return {};
+  }
+
+  const headers = values[0].map(value => String(value));
+  const index = {};
+  headers.forEach((header, columnIndex) => {
+    index[header] = columnIndex;
+  });
+  if (index.symbol === undefined || index.generatedAt === undefined) {
+    return {};
+  }
+
+  const latest = {};
+  values.slice(1).forEach(row => {
+    const symbol = normalizeSymbol_(row[index.symbol]);
+    if (!symbol) {
+      return;
+    }
+    const current = latest[symbol];
+    if (!current || compareDeanValuationGeneratedAt_(row[index.generatedAt], current.generatedAtRaw) >= 0) {
+      latest[symbol] = {
+        generatedAtRaw: row[index.generatedAt],
+        symbol,
+        name: String(row[index.name] || ''),
+        lastPrice: Number(row[index.lastPrice] || 0),
+        fairValue: Number(row[index.fairValue] || 0),
+        intradayTarget: Number(row[index.intradayTarget] || 0),
+        downsideRisk: Number(row[index.downsideRisk] || 0),
+        upsidePct: Number(row[index.upsidePct] || 0),
+        confidence: Number(row[index.confidence] || 0),
+        rating: String(row[index.rating] || ''),
+        limitUpPlan: String(row[index.limitUpPlan] || ''),
+        valuationReasoning: String(row[index.valuationReasoning] || '')
+      };
+    }
+  });
+
+  Object.keys(latest).forEach(symbol => {
+    delete latest[symbol].generatedAtRaw;
+  });
+  return latest;
+}
+
+function compareDeanValuationGeneratedAt_(left, right) {
+  const leftTime = Object.prototype.toString.call(left) === '[object Date]' ? left.getTime() : new Date(left).getTime();
+  const rightTime = Object.prototype.toString.call(right) === '[object Date]' ? right.getTime() : new Date(right).getTime();
+  if (!isNaN(leftTime) && !isNaN(rightTime)) {
+    return leftTime - rightTime;
+  }
+  return String(left || '').localeCompare(String(right || ''));
+}
+
+function getDeanRatingRank_(rating) {
+  const ranks = {
+    sell: 0,
+    avoid: 1,
+    watch: 2,
+    buy: 3,
+    strong_buy: 4
+  };
+  return ranks[String(rating || '').toLowerCase()] || 0;
 }
 
 function getDeanConfidenceRule_(strategy, confidence) {

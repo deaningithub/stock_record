@@ -34,6 +34,15 @@ const DEAN_AUTOSTOCK_CONFIG = {
         aboveShortVwap: 0.1,
         hasRecentVolume: 0.1
       },
+      valuation: {
+        requireAiValuation: true,
+        minConfidence: 6,
+        minUpsidePct: 4,
+        minRatingRank: 2,
+        scoreBonus: 0.25,
+        strongHoldConfidence: 7,
+        strongHoldUpsidePct: 8
+      },
       theme: {
         breadthScoreThreshold: 0.6,
         maxBreadthBonus: 0.15
@@ -74,6 +83,14 @@ const DEAN_AUTOSTOCK_CONFIG = {
         defaultSupportLookbackBars: 30,
         defaultResistanceLookbackBars: 60
       },
+      valuation: {
+        requireAiValuation: true,
+        minConfidence: 6,
+        minUpsidePct: 5,
+        minRatingRank: 2,
+        strongHoldConfidence: 7,
+        strongHoldUpsidePct: 8
+      },
       exit: {
         supportBreakPct: 1.5,
         forceExitTime: '13:20',
@@ -101,6 +118,14 @@ const DEAN_AUTOSTOCK_CONFIG = {
         openDelayMinutes: 3,
         maxConcurrentPositions: 5,
         maxDailyEntriesPerSymbol: 1
+      },
+      valuation: {
+        requireAiValuation: true,
+        minConfidence: 6,
+        minUpsidePct: 5,
+        minRatingRank: 2,
+        strongHoldConfidence: 7,
+        strongHoldUpsidePct: 8
       },
       exit: {
         takeProfitDailyChangePct: 9.9,
@@ -170,7 +195,8 @@ const DEAN_AUTOSTOCK_CONFIG = {
       valuation: {
         defaultConfidence: 7,
         defaultEntryPriceSource: 'first_close',
-        defaultTargetUpsidePct: 12.0
+        defaultTargetUpsidePct: 12.0,
+        preferAiValuation: true
       },
       risk: {
         baseBudgetTwd: 500000,
