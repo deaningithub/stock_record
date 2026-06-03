@@ -80,7 +80,7 @@ function callOpenAiValuation_(inputs) {
     payload: JSON.stringify({
       model: AI_VALUATION_CONFIG.openAiModel,
       reasoning: { effort: 'medium' },
-      max_output_tokens: 12000,
+      max_output_tokens: 20000,
       tools: [{
         type: 'web_search',
         user_location: {
@@ -98,6 +98,8 @@ function callOpenAiValuation_(inputs) {
         'Use current Taiwan news, global news, and US market context before producing valuations.',
         'Focus on whether each stock should be held for limit-up momentum or avoided because the setup is weak.',
         'Do not invent facts. If live evidence is thin, lower confidence and explain the uncertainty.',
+        'Keep every per-symbol text field concise: newsSummary <= 120 chars, valuationReasoning <= 180 chars, limitUpPlan <= 120 chars, usMarketImpact <= 120 chars.',
+        'Use at most 2 source URLs per symbol.',
         'Return only JSON that matches the schema.'
       ].join('\n'),
       input: buildAiValuationPrompt_(inputs),
@@ -150,7 +152,13 @@ function parseOpenAiValuationResponse_(responseJson) {
   if (!text) {
     throw new Error('OpenAI valuation response did not contain output text.');
   }
-  const parsed = JSON.parse(text);
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch (error) {
+    const preview = text.slice(Math.max(0, text.length - 500));
+    throw new Error(`OpenAI valuation JSON parse failed: ${error.message}. outputLength=${text.length}. tail=${preview}`);
+  }
   if (!parsed.valuations || !Array.isArray(parsed.valuations)) {
     throw new Error('OpenAI valuation response missing valuations array.');
   }
@@ -392,6 +400,7 @@ function getAiValuationJsonSchema_() {
     properties: {
       marketSummary: {
         type: 'string',
+        maxLength: 500,
         description: 'Brief summary of Taiwan, US market, and catalyst context used for this batch.'
       },
       valuations: {
@@ -418,7 +427,7 @@ function getAiValuationJsonSchema_() {
           ],
           properties: {
             symbol: { type: 'string' },
-            name: { type: 'string' },
+            name: { type: 'string', maxLength: 40 },
             lastPrice: { type: 'number' },
             fairValue: { type: 'number' },
             intradayTarget: { type: 'number' },
@@ -429,12 +438,13 @@ function getAiValuationJsonSchema_() {
               type: 'string',
               enum: ['strong_buy', 'buy', 'watch', 'avoid', 'sell']
             },
-            limitUpPlan: { type: 'string' },
-            usMarketImpact: { type: 'string' },
-            newsSummary: { type: 'string' },
-            valuationReasoning: { type: 'string' },
+            limitUpPlan: { type: 'string', maxLength: 120 },
+            usMarketImpact: { type: 'string', maxLength: 120 },
+            newsSummary: { type: 'string', maxLength: 120 },
+            valuationReasoning: { type: 'string', maxLength: 180 },
             keySources: {
               type: 'array',
+              maxItems: 2,
               items: { type: 'string' }
             }
           }
