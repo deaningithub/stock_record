@@ -55,6 +55,7 @@ function onOpen() {
     .addItem('Record latest daily candles', 'recordLatestDailyCandles')
     .addItem('Recalculate AI valuations', 'recalculateAiValuationsAtOpen')
     .addItem('Monitor bad-news signals', 'monitorBadNewsSignals')
+    .addItem('Setup limit-up external evidence', 'setupLimitUpExternalEvidenceSheet')
     .addSeparator()
     .addItem('Start 60-day minute backfill', 'startMinuteReplayBackfill60Days')
     .addItem('Continue minute backfill now', 'continueMinuteReplayBackfill')
@@ -97,6 +98,7 @@ function setupSheets() {
   const logSheet = getOrCreateSheet_(spreadsheet, CONFIG.logSheetName);
   const aiValuationSheet = getOrCreateSheet_(spreadsheet, AI_VALUATION_CONFIG.sheetName);
   const badNewsSheet = getOrCreateSheet_(spreadsheet, BAD_NEWS_CONFIG.sheetName);
+  const limitUpExternalEvidenceSheet = getOrCreateSheet_(spreadsheet, LIMIT_UP_EXTERNAL_EVIDENCE_CONFIG.sheetName);
 
   setHeader_(configSheet, ['symbol', 'enabled', 'name', 'themes', 'note']);
   syncWatchlistRows_(configSheet);
@@ -151,6 +153,7 @@ function setupSheets() {
   setHeader_(logSheet, ['time', 'level', 'message']);
   setHeader_(aiValuationSheet, getAiValuationHeaders_());
   setHeader_(badNewsSheet, getBadNewsMonitorHeaders_());
+  setHeader_(limitUpExternalEvidenceSheet, getLimitUpExternalEvidenceHeaders_());
   spreadsheet.toast('Taiwan stock recorder sheets are ready.', 'Setup complete', 5);
 }
 

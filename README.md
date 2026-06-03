@@ -14,6 +14,7 @@ This repository contains the Apps Script source code and strategy configuration 
 | `trigger.js` | Installs and removes Apps Script time-based triggers for daily stock recording, minute replay collection, realtime snapshots, after-close collection, and minute backfill continuation. |
 | `ai_valuation.js` | Recalculates morning AI valuations for enabled watchlist stocks using local sheet data, the prior 7 days of valuation history, and OpenAI web search for current Taiwan news, US market context, and catalyst reasoning. |
 | `bad_news_monitor.js` | Monitors current negative news, disclosures, downgrades, macro shocks, and US-market read-through, then writes risk signals to `BadNewsMonitor` for strategy risk controls. |
+| `limit_up_external_evidence.js` | Defines the `LimitUpExternalEvidence` sheet schema and helper scoring formula for external limit-up evidence. |
 | `realtime_gas.js` | Collects realtime Fugle intraday quote snapshots and writes quote-derived features such as bid/ask, midpoint, spread percentage, book imbalance, micro price, trade volume, and last trade metadata. |
 | `strategies.js` | Defines baseline intraday backtest strategies, including opening range breakout, VWAP momentum, and dip reversal. |
 | `backtest.js` | Runs baseline strategy backtests against `MinuteReplay` data, simulates entries/exits, calculates costs, and writes trades to `BacktestTrades`. |
@@ -39,6 +40,7 @@ The code expects these Google Sheets tabs:
 | `DeanBacktestReport` | Summary report for Dean autostock strategies. |
 | `AIValuations` | Daily AI fair-value and intraday target estimates with news, US-market impact, limit-up plan, confidence, sources, and 7-day trend context for later strategy decisions. |
 | `BadNewsMonitor` | Dedicated negative-news monitor output. High-risk rows block new entries, and critical rows can force exits. |
+| `LimitUpExternalEvidence` | Dedicated per-symbol per-date external evidence for limit-up setups, including news, institution, branch, chip, external score, and trigger fields. |
 | `RunLog` | Runtime logs and API errors. |
 
 ## Setup
@@ -95,6 +97,7 @@ The code expects these Google Sheets tabs:
 | `recordTodayMinuteReplayCandlesAfterClose()` | Captures the current trading day's minute candles after close. |
 | `recalculateAiValuationsAtOpen()` | Uses OpenAI Responses API with web search to recalculate AI valuations for the enabled watchlist. |
 | `monitorBadNewsSignals()` | Uses OpenAI Responses API with web search to detect bad-news signals and write `BadNewsMonitor`. |
+| `setupLimitUpExternalEvidenceSheet()` | Creates or refreshes the `LimitUpExternalEvidence` header row. |
 | `startMinuteReplayBackfill60Days()` | Starts a 60-day minute replay backfill workflow. |
 | `continueMinuteReplayBackfill()` | Continues the backfill batch. |
 | `runAllStrategyBacktests()` | Runs all baseline backtests. |
