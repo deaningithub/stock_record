@@ -6,7 +6,6 @@ const TRIGGER_CONFIG = {
   gasRealtimeHandlerName: 'collectGasRealtimeSnapshots',
   aiValuationHandlerName: 'recalculateAiValuationsAtOpen',
   badNewsHandlerName: 'monitorBadNewsSignals',
-  defaultIntervalDays: 1,
   minIntervalDays: 1,
   maxIntervalDays: 5,
   hour: 15,
@@ -19,28 +18,29 @@ function recordStockInfo() {
   recordLatestDailyCandles();
 }
 
-function installRecordTrigger() {
-  installRecordTriggerEveryNDays_(TRIGGER_CONFIG.defaultIntervalDays);
-}
-
 function installRecordTriggerEvery1Day() {
   installRecordTriggerEveryNDays_(1);
 }
 
-function installRecordTriggerEvery2Days() {
-  installRecordTriggerEveryNDays_(2);
+function installRecommendedProjectTriggers() {
+  removeTriggersFor_('recordLatestDailyCandles');
+  installRecordTriggerEvery1Day();
+  installAiValuationTriggerAt9();
+  installBadNewsMonitorTrigger();
+  installGasRealtimeSnapshotTrigger();
+  installMinuteReplayTriggerEvery5Minutes();
+  installAfterCloseMinuteReplayTrigger();
+  auditProjectTriggers();
+  log_('INFO', 'Installed recommended project triggers and removed legacy standalone daily-candle trigger.');
 }
 
-function installRecordTriggerEvery3Days() {
-  installRecordTriggerEveryNDays_(3);
-}
-
-function installRecordTriggerEvery4Days() {
-  installRecordTriggerEveryNDays_(4);
-}
-
-function installRecordTriggerEvery5Days() {
-  installRecordTriggerEveryNDays_(5);
+function auditProjectTriggers() {
+  const rows = ScriptApp.getProjectTriggers().map(trigger => {
+    const source = trigger.getTriggerSource ? trigger.getTriggerSource() : '';
+    const eventType = trigger.getEventType ? trigger.getEventType() : '';
+    return `${trigger.getHandlerFunction()} | source=${source} | event=${eventType}`;
+  });
+  log_('INFO', `Project triggers (${rows.length}): ${rows.join('; ') || 'none'}`);
 }
 
 function installMinuteReplayTriggerEvery1Minute() {

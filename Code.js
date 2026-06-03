@@ -76,15 +76,15 @@ function onOpen() {
     .addItem('Run Dean TaiwanBull', 'runDeanTaiwanBullBacktest')
     .addItem('Generate Dean backtest report', 'generateDeanBacktestReport')
     .addSeparator()
+    .addItem('Install recommended triggers', 'installRecommendedProjectTriggers')
+    .addItem('Audit project triggers', 'auditProjectTriggers')
     .addItem('Install stock trigger: every 1 day', 'installRecordTriggerEvery1Day')
-    .addItem('Install stock trigger: every 5 days', 'installRecordTriggerEvery5Days')
     .addItem('Install GAS realtime snapshot trigger', 'installGasRealtimeSnapshotTrigger')
     .addItem('Install AI valuation trigger: 09:00', 'installAiValuationTriggerAt9')
     .addItem('Install bad-news monitor trigger', 'installBadNewsMonitorTrigger')
     .addItem('Install minute replay trigger: every 1 minute', 'installMinuteReplayTriggerEvery1Minute')
     .addItem('Install minute replay trigger: every 5 minutes', 'installMinuteReplayTriggerEvery5Minutes')
     .addItem('Install after-close minute replay trigger', 'installAfterCloseMinuteReplayTrigger')
-    .addItem('Install daily trigger', 'installDailyTrigger')
     .addItem('Remove project triggers', 'removeProjectTriggers')
     .addToUi();
 }
@@ -340,18 +340,6 @@ function stopMinuteReplayBackfill() {
   properties.deleteProperty('MINUTE_BACKFILL_SYMBOL_INDEX');
   properties.deleteProperty('MINUTE_BACKFILL_DATE_INDEX');
   log_('INFO', 'Stopped minute replay backfill.');
-}
-
-function installDailyTrigger() {
-  removeTriggersFor_('recordLatestDailyCandles');
-  ScriptApp.newTrigger('recordLatestDailyCandles')
-    .timeBased()
-    .atHour(15)
-    .nearMinute(10)
-    .everyDays(1)
-    .inTimezone('Asia/Taipei')
-    .create();
-  log_('INFO', 'Installed daily candle trigger near 15:10 Asia/Taipei.');
 }
 
 function removeProjectTriggers() {
