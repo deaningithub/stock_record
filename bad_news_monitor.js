@@ -13,6 +13,8 @@ const BAD_NEWS_CONFIG = {
     low: 1,
     medium: 2,
     high: 3,
+    watch: 1,
+    serious: 3,
     critical: 4
   }
 };
@@ -92,6 +94,7 @@ function callOpenAiBadNewsMonitor_(inputs) {
         'You are a Taiwan equity risk monitor.',
         'Detect credible bad-news signals that could invalidate a bullish valuation or limit-up momentum setup.',
         'Separate real material negatives from routine volatility, rumors, and repeated old news.',
+        'Use severity only from: none, watch, serious, critical.',
         'Be conservative with force-exit decisions: only critical or clearly material negative news should force exit.',
         'Return only JSON matching the schema.'
       ].join('\n'),
@@ -162,7 +165,7 @@ function writeBadNewsMonitorResult_(result, inputs) {
     const symbol = normalizeSymbol_(signal.symbol);
     const input = inputBySymbol[symbol] || {};
     const riskScore = Number(signal.riskScore || 0);
-    const severity = signal.severity || 'none';
+    const severity = normalizeBadNewsSeverity_(signal.severity || 'none');
     return [
       new Date(),
       runId,
@@ -249,7 +252,7 @@ function getBadNewsJsonSchema_() {
             riskScore: { type: 'number' },
             severity: {
               type: 'string',
-              enum: ['none', 'low', 'medium', 'high', 'critical']
+              enum: ['none', 'watch', 'serious', 'critical']
             },
             riskType: { type: 'string' },
             shouldBlockEntry: { type: 'boolean' },
@@ -266,4 +269,18 @@ function getBadNewsJsonSchema_() {
       }
     }
   };
+}
+
+function normalizeBadNewsSeverity_(severity) {
+  const value = String(severity || '').toLowerCase();
+  if (value === 'low' || value === 'medium') {
+    return 'watch';
+  }
+  if (value === 'high') {
+    return 'serious';
+  }
+  if (value === 'critical') {
+    return 'critical';
+  }
+  return value === 'watch' || value === 'serious' ? value : 'none';
 }

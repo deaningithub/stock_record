@@ -72,7 +72,7 @@ Known sheet ID:
 - `ai_valuation.js`: daily AI intraday valuation using OpenAI Responses API and web search.
 - `weekly_ai_valuation.js`: weekly three-month forward valuation using OpenAI Responses API and web search.
 - `bad_news_monitor.js`: negative-news risk monitor using OpenAI Responses API and web search.
-- `limit_up_external_evidence.js`: `LimitUpExternalEvidence` schema and score/trigger helper formula.
+- `limit_up_external_evidence.js`: `LimitUpExternalEvidence` AI/web-search refresh handler, freshness fields, material bad-news mapping, and local score/trigger formula.
 - `realtime_gas.js`: realtime quote feature snapshots.
 - `backtest.js`, `strategies.js`, `report.js`: baseline intraday backtest.
 - `dean_strategy_configs.js`, `dean_backtest.js`, `dean_report.js`: Dean strategy suite and reporting.
@@ -89,6 +89,7 @@ It installs:
 - `recalculateAiValuationsAtOpen`: daily near 09:00 Asia/Taipei.
 - `recalculateWeeklyThreeMonthValuations`: weekly near Sunday 18:00 Asia/Taipei.
 - `monitorBadNewsSignals`: every 15 minutes; handler runs only on weekdays 08:00-14:00 Asia/Taipei.
+- `refreshLimitUpExternalEvidence`: every 30 minutes; handler runs only on weekdays 08:30-13:35 Asia/Taipei.
 - `collectGasRealtimeSnapshots`: every 1 minute; handler guards market hours.
 - `recordMinuteReplayCandles`: every 5 minutes; handler guards market hours.
 - `recordTodayMinuteReplayCandlesAfterClose`: daily near 14:30 Asia/Taipei.
@@ -143,6 +144,7 @@ Bad-news monitor:
 
 - Function: `monitorBadNewsSignals()`
 - Sheet: `BadNewsMonitor`
+- Severity output is normalized to `none | watch | serious | critical`; legacy `low | medium | high` values are mapped internally for ranking.
 - Risk scoring:
   - `riskScore >= 75` blocks new entries.
   - `riskScore >= 85` can force exit.
@@ -151,8 +153,10 @@ Bad-news monitor:
 
 Limit-up external evidence:
 
+- Function: `refreshLimitUpExternalEvidence()`
 - Sheet: `LimitUpExternalEvidence`
 - Minimal fields needed by downstream strategy: `symbol`, `date`, `news_score`, `institution_score`, `branch_score`, `chip_score`, `trigger`.
+- Also provides freshness and material bad-news fields: `data_freshness_minutes`, `news_checked_at`, `institution_data_date`, `margin_short_data_date`, `branch_data_date`, `material_bad_news`, `bad_news_severity`, `bad_news_action`, `bad_news_reason`.
 - Current helper formula:
   - `external_score = news_score*0.30 + institution_score*0.25 + branch_score*0.30 + chip_score*0.15`
   - Trigger when `external_score >= 0.70`, no bad news, `branch_score >= 0.60`, and `news_score >= 0.40`.

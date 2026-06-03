@@ -15,7 +15,7 @@ This repository contains the Apps Script source code and strategy configuration 
 | `ai_valuation.js` | Recalculates morning AI valuations for enabled watchlist stocks using local sheet data, the prior 7 days of valuation history, and OpenAI web search for current Taiwan news, US market context, and catalyst reasoning. |
 | `weekly_ai_valuation.js` | Recalculates weekly three-month forward fair values using current news, sector catalysts, US-market read-through, and latest intraday valuation context. |
 | `bad_news_monitor.js` | Monitors current negative news, disclosures, downgrades, macro shocks, and US-market read-through, then writes risk signals to `BadNewsMonitor` for strategy risk controls. |
-| `limit_up_external_evidence.js` | Defines the `LimitUpExternalEvidence` sheet schema and helper scoring formula for external limit-up evidence. |
+| `limit_up_external_evidence.js` | Refreshes `LimitUpExternalEvidence` with AI/web-search external evidence, data freshness, material bad-news mapping, and local external-score/trigger calculation. |
 | `realtime_gas.js` | Collects realtime Fugle intraday quote snapshots and writes quote-derived features such as bid/ask, midpoint, spread percentage, book imbalance, micro price, trade volume, and last trade metadata. |
 | `strategies.js` | Defines baseline intraday backtest strategies, including opening range breakout, VWAP momentum, and dip reversal. |
 | `backtest.js` | Runs baseline strategy backtests against `MinuteReplay` data, simulates entries/exits, calculates costs, and writes trades to `BacktestTrades`. |
@@ -42,7 +42,7 @@ The code expects these Google Sheets tabs:
 | `AIValuations` | Daily AI fair-value and intraday target estimates with news, US-market impact, limit-up plan, confidence, sources, and 7-day trend context for later strategy decisions. |
 | `WeeklyAIValuations` | Weekly AI three-month fair-value estimates with thesis, catalysts, risks, confidence, and sources. |
 | `BadNewsMonitor` | Dedicated negative-news monitor output. High-risk rows block new entries, and critical rows can force exits. |
-| `LimitUpExternalEvidence` | Dedicated per-symbol per-date external evidence for limit-up setups, including news, institution, branch, chip, external score, and trigger fields. |
+| `LimitUpExternalEvidence` | Dedicated per-symbol per-date external evidence for limit-up setups, including news, institution, branch/main-force, margin-short/chip, freshness, material bad-news, external score, and trigger fields. |
 | `RunLog` | Runtime logs and API errors. |
 
 ## Setup
@@ -100,6 +100,7 @@ The code expects these Google Sheets tabs:
 | `recalculateAiValuationsAtOpen()` | Uses OpenAI Responses API with web search to recalculate AI valuations for the enabled watchlist. |
 | `recalculateWeeklyThreeMonthValuations()` | Uses OpenAI Responses API with web search to recalculate weekly three-month forward valuations. |
 | `monitorBadNewsSignals()` | Uses OpenAI Responses API with web search to detect bad-news signals and write `BadNewsMonitor`. |
+| `refreshLimitUpExternalEvidence()` | Uses OpenAI Responses API with web search to populate `LimitUpExternalEvidence` during the Taiwan intraday window. |
 | `setupLimitUpExternalEvidenceSheet()` | Creates or refreshes the `LimitUpExternalEvidence` header row. |
 | `startMinuteReplayBackfill60Days()` | Starts a 60-day minute replay backfill workflow. |
 | `continueMinuteReplayBackfill()` | Continues the backfill batch. |
@@ -121,6 +122,7 @@ Use the menu or run these functions manually:
 | `installAiValuationTriggerAt9()` | Daily AI valuation recalculation near 09:00 Asia/Taipei, with weekend guard. |
 | `installWeeklyThreeMonthValuationTrigger()` | Weekly three-month valuation recalculation near Sunday 18:00 Asia/Taipei. |
 | `installBadNewsMonitorTrigger()` | Bad-news monitor every 15 minutes, with 08:00-14:00 Asia/Taipei weekday guard. |
+| `installLimitUpExternalEvidenceTrigger()` | Limit-up external evidence refresh every 30 minutes, with 08:30-13:35 Asia/Taipei weekday guard. |
 | `installMinuteReplayTriggerEvery1Minute()` | Minute replay collection every minute, with market-hour guard. |
 | `installMinuteReplayTriggerEvery5Minutes()` | Minute replay collection every five minutes. |
 | `installAfterCloseMinuteReplayTrigger()` | After-close minute replay capture near 14:30 Asia/Taipei. |

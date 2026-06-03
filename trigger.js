@@ -7,6 +7,7 @@ const TRIGGER_CONFIG = {
   aiValuationHandlerName: 'recalculateAiValuationsAtOpen',
   weeklyValuationHandlerName: 'recalculateWeeklyThreeMonthValuations',
   badNewsHandlerName: 'monitorBadNewsSignals',
+  limitUpEvidenceHandlerName: 'refreshLimitUpExternalEvidence',
   minIntervalDays: 1,
   maxIntervalDays: 5,
   hour: 16,
@@ -29,6 +30,7 @@ function installRecommendedProjectTriggers() {
   installAiValuationTriggerAt9();
   installWeeklyThreeMonthValuationTrigger();
   installBadNewsMonitorTrigger();
+  installLimitUpExternalEvidenceTrigger();
   installGasRealtimeSnapshotTrigger();
   installMinuteReplayTriggerEvery5Minutes();
   installAfterCloseMinuteReplayTrigger();
@@ -97,6 +99,16 @@ function installBadNewsMonitorTrigger() {
     .create();
 
   log_('INFO', 'Installed bad-news monitor trigger every 15 minutes. The handler skips outside 08:00-14:00 Asia/Taipei weekdays.');
+}
+
+function installLimitUpExternalEvidenceTrigger() {
+  removeTriggersFor_(TRIGGER_CONFIG.limitUpEvidenceHandlerName);
+  ScriptApp.newTrigger(TRIGGER_CONFIG.limitUpEvidenceHandlerName)
+    .timeBased()
+    .everyMinutes(30)
+    .create();
+
+  log_('INFO', 'Installed limit-up external evidence trigger every 30 minutes. The handler skips outside 08:30-13:35 Asia/Taipei weekdays.');
 }
 
 function installAfterCloseMinuteReplayTrigger() {
