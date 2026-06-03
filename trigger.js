@@ -5,6 +5,7 @@ const TRIGGER_CONFIG = {
   minuteBackfillHandlerName: 'continueMinuteReplayBackfill',
   gasRealtimeHandlerName: 'collectGasRealtimeSnapshots',
   aiValuationHandlerName: 'recalculateAiValuationsAtOpen',
+  weeklyValuationHandlerName: 'recalculateWeeklyThreeMonthValuations',
   badNewsHandlerName: 'monitorBadNewsSignals',
   minIntervalDays: 1,
   maxIntervalDays: 5,
@@ -26,6 +27,7 @@ function installRecommendedProjectTriggers() {
   removeTriggersFor_('recordLatestDailyCandles');
   installRecordTriggerEvery1Day();
   installAiValuationTriggerAt9();
+  installWeeklyThreeMonthValuationTrigger();
   installBadNewsMonitorTrigger();
   installGasRealtimeSnapshotTrigger();
   installMinuteReplayTriggerEvery5Minutes();
@@ -72,6 +74,19 @@ function installAiValuationTriggerAt9() {
     .create();
 
   log_('INFO', 'Installed AI valuation trigger near 09:00 Asia/Taipei every day. The handler skips weekends.');
+}
+
+function installWeeklyThreeMonthValuationTrigger() {
+  removeTriggersFor_(TRIGGER_CONFIG.weeklyValuationHandlerName);
+  ScriptApp.newTrigger(TRIGGER_CONFIG.weeklyValuationHandlerName)
+    .timeBased()
+    .onWeekDay(ScriptApp.WeekDay.SUNDAY)
+    .atHour(18)
+    .nearMinute(0)
+    .inTimezone(TRIGGER_CONFIG.timezone)
+    .create();
+
+  log_('INFO', 'Installed weekly three-month valuation trigger near Sunday 18:00 Asia/Taipei.');
 }
 
 function installBadNewsMonitorTrigger() {

@@ -54,6 +54,7 @@ function onOpen() {
     .addItem('Record minute replay candles', 'recordMinuteReplayCandles')
     .addItem('Record latest daily candles', 'recordLatestDailyCandles')
     .addItem('Recalculate AI valuations', 'recalculateAiValuationsAtOpen')
+    .addItem('Recalculate weekly 3-month valuations', 'recalculateWeeklyThreeMonthValuations')
     .addItem('Monitor bad-news signals', 'monitorBadNewsSignals')
     .addItem('Setup limit-up external evidence', 'setupLimitUpExternalEvidenceSheet')
     .addSeparator()
@@ -81,6 +82,7 @@ function onOpen() {
     .addItem('Install stock trigger: every 1 day', 'installRecordTriggerEvery1Day')
     .addItem('Install GAS realtime snapshot trigger', 'installGasRealtimeSnapshotTrigger')
     .addItem('Install AI valuation trigger: 09:00', 'installAiValuationTriggerAt9')
+    .addItem('Install weekly 3-month valuation trigger', 'installWeeklyThreeMonthValuationTrigger')
     .addItem('Install bad-news monitor trigger', 'installBadNewsMonitorTrigger')
     .addItem('Install minute replay trigger: every 1 minute', 'installMinuteReplayTriggerEvery1Minute')
     .addItem('Install minute replay trigger: every 5 minutes', 'installMinuteReplayTriggerEvery5Minutes')
@@ -97,6 +99,7 @@ function setupSheets() {
   const minuteReplaySheet = getOrCreateSheet_(spreadsheet, CONFIG.minuteReplaySheetName);
   const logSheet = getOrCreateSheet_(spreadsheet, CONFIG.logSheetName);
   const aiValuationSheet = getOrCreateSheet_(spreadsheet, AI_VALUATION_CONFIG.sheetName);
+  const weeklyAiValuationSheet = getOrCreateSheet_(spreadsheet, WEEKLY_AI_VALUATION_CONFIG.sheetName);
   const badNewsSheet = getOrCreateSheet_(spreadsheet, BAD_NEWS_CONFIG.sheetName);
   const limitUpExternalEvidenceSheet = getOrCreateSheet_(spreadsheet, LIMIT_UP_EXTERNAL_EVIDENCE_CONFIG.sheetName);
 
@@ -152,6 +155,7 @@ function setupSheets() {
 
   setHeader_(logSheet, ['time', 'level', 'message']);
   setHeader_(aiValuationSheet, getAiValuationHeaders_());
+  setHeader_(weeklyAiValuationSheet, getWeeklyAiValuationHeaders_());
   setHeader_(badNewsSheet, getBadNewsMonitorHeaders_());
   setHeader_(limitUpExternalEvidenceSheet, getLimitUpExternalEvidenceHeaders_());
   spreadsheet.toast('Taiwan stock recorder sheets are ready.', 'Setup complete', 5);
