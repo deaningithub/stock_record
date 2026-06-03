@@ -8,8 +8,8 @@ const TRIGGER_CONFIG = {
   badNewsHandlerName: 'monitorBadNewsSignals',
   minIntervalDays: 1,
   maxIntervalDays: 5,
-  hour: 15,
-  nearMinute: 20,
+  hour: 16,
+  nearMinute: 5,
   timezone: 'Asia/Taipei'
 };
 

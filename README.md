@@ -113,7 +113,7 @@ Use the menu or run these functions manually:
 | --- | --- |
 | `installRecommendedProjectTriggers()` | Installs the recommended production trigger set and removes the legacy standalone daily-candle trigger. |
 | `auditProjectTriggers()` | Logs the currently installed Apps Script triggers to `RunLog`. |
-| `installRecordTriggerEvery1Day()` | Daily stock quote/daily candle recording. |
+| `installRecordTriggerEvery1Day()` | Daily stock quote/daily candle recording near 16:05 Asia/Taipei, after daily data is more likely to be stable. |
 | `installGasRealtimeSnapshotTrigger()` | Realtime feature collection every minute, with market-hour guard. |
 | `installAiValuationTriggerAt9()` | Daily AI valuation recalculation near 09:00 Asia/Taipei, with weekend guard. |
 | `installBadNewsMonitorTrigger()` | Bad-news monitor every 15 minutes, with 08:00-14:00 Asia/Taipei weekday guard. |
