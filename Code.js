@@ -13,6 +13,7 @@ const CONFIG = {
   watchlist: [
     { symbol: '2382', name: '廣達', themes: 'ai_server, hot_rotation' },
     { symbol: '1301', name: '台塑', themes: 'plastics, traditional_industry' },
+    { symbol: '1304', name: '台聚', themes: 'plastics, petrochemical, traditional_industry' },
     { symbol: '1326', name: '台化', themes: 'plastics, traditional_industry' },
     { symbol: '6505', name: '台塑化', themes: 'petrochemical, traditional_industry' },
     { symbol: '2408', name: '南亞科', themes: 'memory, hot_rotation' },
@@ -35,6 +36,8 @@ const CONFIG = {
     { symbol: '1519', name: '華城', themes: 'heavy_electric, power, hot_rotation' },
     { symbol: '2409', name: '友達', themes: 'panel, hot_rotation' },
     { symbol: '2330', name: '台積電', themes: 'semiconductor, ai_chip, hot_rotation' },
+    { symbol: '2308', name: '台達電', themes: 'power, heavy_electric, ai_server, ev, hot_rotation' },
+    { symbol: '6669', name: '緯穎', themes: 'ai_server, cloud_server, hot_rotation' },
     { symbol: '2317', name: '鴻海', themes: 'ai_server, ev, hot_rotation' },
     { symbol: '3711', name: '日月光投控', themes: 'semiconductor, ic_packaging, hot_rotation' },
     { symbol: '1802', name: '台玻', themes: 'glass, traditional_industry' }
@@ -62,21 +65,6 @@ function onOpen() {
     .addItem('Start 60-day minute backfill', 'startMinuteReplayBackfill60Days')
     .addItem('Continue minute backfill now', 'continueMinuteReplayBackfill')
     .addItem('Stop minute backfill', 'stopMinuteReplayBackfill')
-    .addSeparator()
-    .addItem('Run all strategy backtests', 'runAllStrategyBacktests')
-    .addItem('Run ORB backtest', 'runOpeningRangeBreakoutBacktest')
-    .addItem('Run VWAP momentum backtest', 'runVwapMomentumBacktest')
-    .addItem('Run dip reversal backtest', 'runDipReversalBacktest')
-    .addItem('Generate backtest report', 'generateBacktestReport')
-    .addSeparator()
-    .addItem('Run Dean autostock backtests', 'runDeanAutoStockBacktests')
-    .addItem('Run Dean AI rotation', 'runDeanAiRotationBacktest')
-    .addItem('Run Dean theme stock', 'runDeanThemeStockBacktest')
-    .addItem('Run Dean limit up', 'runDeanLimitUpBacktest')
-    .addItem('Run Dean limit up swing', 'runDeanLimitUpSwingBacktest')
-    .addItem('Run Dean fundamental momentum', 'runDeanFundamentalMomentumBacktest')
-    .addItem('Run Dean TaiwanBull', 'runDeanTaiwanBullBacktest')
-    .addItem('Generate Dean backtest report', 'generateDeanBacktestReport')
     .addSeparator()
     .addItem('Install recommended triggers', 'installRecommendedProjectTriggers')
     .addItem('Audit project triggers', 'auditProjectTriggers')
