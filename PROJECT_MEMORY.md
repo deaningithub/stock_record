@@ -49,7 +49,9 @@ AI/risk/external evidence tabs:
 
 - `AIValuations`: daily 09:00 intraday AI valuation and target.
 - `WeeklyAIValuations`: weekly three-month forward valuation.
-- `DailyStockScan`: local daily ranking for the 100-symbol scan universe, with top-pick flags and combined momentum/order-book/AI/external/bad-news scoring.
+- `DailyStockScan`: local daily ranking for the 100-symbol shortlist from `StockScanPool500`, with top-pick flags and combined momentum/order-book/AI/external/bad-news scoring.
+- `AllStockUniverse`: weekly refreshed full-market universe from Fugle ticker lists.
+- `StockScanPool500`: daily refreshed 500-symbol pool selected from `AllStockUniverse` before the 100-symbol daily scan.
 - `BadNewsMonitor`: negative-news risk signals used to block entries or force exits.
 - `LimitUpExternalEvidence`: per-symbol per-date external evidence for limit-up setups.
 
@@ -72,7 +74,7 @@ Known sheet ID:
 - `trigger.js`: trigger installation/audit helpers.
 - `ai_valuation.js`: daily AI intraday valuation using OpenAI Responses API and web search.
 - `weekly_ai_valuation.js`: weekly three-month forward valuation using OpenAI Responses API and web search.
-- `daily_stock_scan.js`: local 100-symbol daily scanner that ranks candidates from sheet data and writes `DailyStockScan`.
+- `daily_stock_scan.js`: full universe/500-pool/100-shortlist scanner that uses Fugle ticker lists plus local sheet evidence; it does not add new OpenAI calls.
 - `bad_news_monitor.js`: negative-news risk monitor using OpenAI Responses API and web search.
 - `limit_up_external_evidence.js`: `LimitUpExternalEvidence` AI/web-search refresh handler, freshness fields, material bad-news mapping, and local score/trigger formula.
 - `realtime_gas.js`: realtime quote feature snapshots.
@@ -91,6 +93,8 @@ It installs:
 - `recalculateAiValuationsAtOpen`: daily near 09:00 Asia/Taipei.
 - `recalculateWeeklyThreeMonthValuations`: weekly near Sunday 18:00 Asia/Taipei.
 - `runDailyStockScan`: daily near 16:30 Asia/Taipei, after the 16:05 daily stock recorder, with weekend guard.
+- `refreshAllStockUniverseWeekly`: weekly near Sunday 17:00 Asia/Taipei; refreshes all normal TWSE/TPEx equity tickers from Fugle `/intraday/tickers`.
+- `refreshStockScanPool500Daily`: daily near 16:20 Asia/Taipei; ranks the full universe into `StockScanPool500` before `runDailyStockScan`.
 - `monitorBadNewsSignals`: every 15 minutes; handler runs only on weekdays 08:00-14:00 Asia/Taipei.
 - `refreshLimitUpExternalEvidence`: every 30 minutes; handler runs only on weekdays 08:30-13:35 Asia/Taipei.
 - `collectGasRealtimeSnapshots`: every 1 minute; handler guards market hours.
@@ -111,7 +115,13 @@ Manual note:
 
 The user wants to catch stocks preparing for limit-up quickly, without exiting just because of short-lived intraday emotion.
 
-The scan universe now contains 100 symbols, preserving the original 30-symbol watchlist and adding large-cap/current AI, semiconductor, PCB, server, financial, telecom, shipping, and traditional-industry names researched from Taiwan market-cap/index context as of 2026-06-06.
+The current workflow has three scan layers:
+
+- `AllStockUniverse`: weekly full-market pool from Fugle tickers.
+- `StockScanPool500`: daily 500-symbol pool, weighted toward current 100 seeds, strategy themes, existing external evidence, AI valuation rows, realtime features, and bad-news penalties.
+- `DailyStockScan`: daily 100-symbol shortlist from the 500 pool.
+
+The current 100-symbol seed list preserves the original 30-symbol watchlist and adds large-cap/current AI, semiconductor, PCB, server, financial, telecom, shipping, and traditional-industry names researched from Taiwan market-cap/index context as of 2026-06-06.
 
 Current Dean strategy logic:
 

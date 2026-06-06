@@ -6,6 +6,8 @@ const TRIGGER_CONFIG = {
   gasRealtimeHandlerName: 'collectGasRealtimeSnapshots',
   aiValuationHandlerName: 'recalculateAiValuationsAtOpen',
   weeklyValuationHandlerName: 'recalculateWeeklyThreeMonthValuations',
+  allStockUniverseHandlerName: 'refreshAllStockUniverseWeekly',
+  stockScanPool500HandlerName: 'refreshStockScanPool500Daily',
   dailyStockScanHandlerName: 'runDailyStockScan',
   badNewsHandlerName: 'monitorBadNewsSignals',
   limitUpEvidenceHandlerName: 'refreshLimitUpExternalEvidence',
@@ -24,6 +26,8 @@ TRIGGER_CONFIG.managedHandlerNames = [
   TRIGGER_CONFIG.gasRealtimeHandlerName,
   TRIGGER_CONFIG.aiValuationHandlerName,
   TRIGGER_CONFIG.weeklyValuationHandlerName,
+  TRIGGER_CONFIG.allStockUniverseHandlerName,
+  TRIGGER_CONFIG.stockScanPool500HandlerName,
   TRIGGER_CONFIG.dailyStockScanHandlerName,
   TRIGGER_CONFIG.badNewsHandlerName,
   TRIGGER_CONFIG.limitUpEvidenceHandlerName,
@@ -45,6 +49,8 @@ function installRecommendedProjectTriggers() {
   installRecordTriggerEvery1Day();
   installAiValuationTriggerAt9();
   installWeeklyThreeMonthValuationTrigger();
+  installAllStockUniverseTrigger();
+  installStockScanPool500Trigger();
   installDailyStockScanTrigger();
   installBadNewsMonitorTrigger();
   installLimitUpExternalEvidenceTrigger();
@@ -115,6 +121,32 @@ function installWeeklyThreeMonthValuationTrigger() {
     .create();
 
   log_('INFO', 'Installed weekly three-month valuation trigger near Sunday 18:00 Asia/Taipei.');
+}
+
+function installAllStockUniverseTrigger() {
+  removeTriggersFor_(TRIGGER_CONFIG.allStockUniverseHandlerName);
+  ScriptApp.newTrigger(TRIGGER_CONFIG.allStockUniverseHandlerName)
+    .timeBased()
+    .onWeekDay(ScriptApp.WeekDay.SUNDAY)
+    .atHour(17)
+    .nearMinute(0)
+    .inTimezone(TRIGGER_CONFIG.timezone)
+    .create();
+
+  log_('INFO', 'Installed all-stock universe refresh trigger near Sunday 17:00 Asia/Taipei.');
+}
+
+function installStockScanPool500Trigger() {
+  removeTriggersFor_(TRIGGER_CONFIG.stockScanPool500HandlerName);
+  ScriptApp.newTrigger(TRIGGER_CONFIG.stockScanPool500HandlerName)
+    .timeBased()
+    .atHour(16)
+    .nearMinute(20)
+    .everyDays(1)
+    .inTimezone(TRIGGER_CONFIG.timezone)
+    .create();
+
+  log_('INFO', 'Installed 500-stock scan pool trigger near 16:20 Asia/Taipei every day, before the 100-stock daily scan.');
 }
 
 function installDailyStockScanTrigger() {

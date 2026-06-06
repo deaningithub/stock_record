@@ -5,6 +5,8 @@ const CONFIG = {
   quoteSheetName: 'IntradayQuotes',
   historySheetName: 'HistoricalDaily',
   minuteReplaySheetName: 'MinuteReplay',
+  allStockUniverseSheetName: 'AllStockUniverse',
+  stockScanPool500SheetName: 'StockScanPool500',
   stockScanSheetName: 'DailyStockScan',
   logSheetName: 'RunLog',
   minuteBackfillDays: 60,
@@ -129,6 +131,8 @@ function onOpen() {
     .addItem('Record latest daily candles', 'recordLatestDailyCandles')
     .addItem('Recalculate AI valuations', 'recalculateAiValuationsAtOpen')
     .addItem('Recalculate weekly 3-month valuations', 'recalculateWeeklyThreeMonthValuations')
+    .addItem('Refresh all-stock universe', 'refreshAllStockUniverseWeekly')
+    .addItem('Refresh 500-stock scan pool', 'refreshStockScanPool500Daily')
     .addItem('Run daily stock scan', 'runDailyStockScan')
     .addItem('Monitor bad-news signals', 'monitorBadNewsSignals')
     .addItem('Refresh limit-up external evidence', 'refreshLimitUpExternalEvidence')
@@ -144,6 +148,8 @@ function onOpen() {
     .addItem('Install GAS realtime snapshot trigger', 'installGasRealtimeSnapshotTrigger')
     .addItem('Install AI valuation trigger: 09:00', 'installAiValuationTriggerAt9')
     .addItem('Install weekly 3-month valuation trigger', 'installWeeklyThreeMonthValuationTrigger')
+    .addItem('Install all-stock universe trigger', 'installAllStockUniverseTrigger')
+    .addItem('Install 500-stock pool trigger', 'installStockScanPool500Trigger')
     .addItem('Install daily stock scan trigger', 'installDailyStockScanTrigger')
     .addItem('Install bad-news monitor trigger', 'installBadNewsMonitorTrigger')
     .addItem('Install limit-up evidence trigger', 'installLimitUpExternalEvidenceTrigger')
@@ -160,6 +166,8 @@ function setupSheets() {
   const quoteSheet = getOrCreateSheet_(spreadsheet, CONFIG.quoteSheetName);
   const historySheet = getOrCreateSheet_(spreadsheet, CONFIG.historySheetName);
   const minuteReplaySheet = getOrCreateSheet_(spreadsheet, CONFIG.minuteReplaySheetName);
+  const allStockUniverseSheet = getOrCreateSheet_(spreadsheet, CONFIG.allStockUniverseSheetName);
+  const stockScanPool500Sheet = getOrCreateSheet_(spreadsheet, CONFIG.stockScanPool500SheetName);
   const stockScanSheet = getOrCreateSheet_(spreadsheet, CONFIG.stockScanSheetName);
   const logSheet = getOrCreateSheet_(spreadsheet, CONFIG.logSheetName);
   const aiValuationSheet = getOrCreateSheet_(spreadsheet, AI_VALUATION_CONFIG.sheetName);
@@ -217,6 +225,8 @@ function setupSheets() {
     'source'
   ]);
 
+  setHeader_(allStockUniverseSheet, getAllStockUniverseHeaders_());
+  setHeader_(stockScanPool500Sheet, getStockScanPool500Headers_());
   setHeader_(stockScanSheet, getDailyStockScanHeaders_());
   setHeader_(logSheet, ['time', 'level', 'message']);
   setHeader_(aiValuationSheet, getAiValuationHeaders_());

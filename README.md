@@ -14,7 +14,7 @@ This repository contains the Apps Script source code and strategy configuration 
 | `trigger.js` | Installs and removes Apps Script time-based triggers for daily stock recording, minute replay collection, realtime snapshots, after-close collection, and minute backfill continuation. |
 | `ai_valuation.js` | Recalculates morning AI valuations for enabled watchlist stocks using local sheet data, the prior 7 days of valuation history, and OpenAI web search for current Taiwan news, US market context, and catalyst reasoning. |
 | `weekly_ai_valuation.js` | Recalculates weekly three-month forward fair values using current news, sector catalysts, US-market read-through, and latest intraday valuation context. |
-| `daily_stock_scan.js` | Ranks the 100-symbol scan universe each trading day using local daily, realtime, AI valuation, bad-news, and external-evidence signals, then writes prioritized candidates to `DailyStockScan`. |
+| `daily_stock_scan.js` | Refreshes the full universe and 500-symbol pool, then ranks the 100-symbol daily shortlist using local daily, realtime, AI valuation, bad-news, and external-evidence signals. |
 | `bad_news_monitor.js` | Monitors current negative news, disclosures, downgrades, macro shocks, and US-market read-through, then writes risk signals to `BadNewsMonitor` for strategy risk controls. |
 | `limit_up_external_evidence.js` | Refreshes `LimitUpExternalEvidence` with AI/web-search external evidence, data freshness, material bad-news mapping, and local external-score/trigger calculation. |
 | `realtime_gas.js` | Collects realtime Fugle intraday quote snapshots and writes quote-derived features such as bid/ask, midpoint, spread percentage, book imbalance, micro price, trade volume, and last trade metadata. |
@@ -42,7 +42,9 @@ The code expects these Google Sheets tabs:
 | `DeanBacktestReport` | Summary report for Dean autostock strategies. |
 | `AIValuations` | Daily AI fair-value and intraday target estimates with news, US-market impact, limit-up plan, confidence, sources, and 7-day trend context for later strategy decisions. |
 | `WeeklyAIValuations` | Weekly AI three-month fair-value estimates with thesis, catalysts, risks, confidence, and sources. |
-| `DailyStockScan` | Daily local ranking of the 100-symbol scan universe, including top-pick flags, momentum, order-book, valuation, external-evidence, and bad-news fields. |
+| `DailyStockScan` | Daily local ranking of the 100-symbol shortlist from `StockScanPool500`, including top-pick flags, momentum, order-book, valuation, external-evidence, and bad-news fields. |
+| `AllStockUniverse` | Weekly refreshed full market universe from Fugle ticker lists, including TWSE/TPEx normal equity tickers plus manual seeds. |
+| `StockScanPool500` | Daily refreshed 500-symbol candidate pool selected from the full universe using local/external evidence before the 100-symbol scan. |
 | `BadNewsMonitor` | Dedicated negative-news monitor output. High-risk rows block new entries, and critical rows can force exits. |
 | `LimitUpExternalEvidence` | Dedicated per-symbol per-date external evidence for limit-up setups, including news, institution, branch/main-force, margin-short/chip, freshness, material bad-news, external score, and trigger fields. |
 | `RunLog` | Runtime logs and API errors. |
@@ -102,6 +104,8 @@ The code expects these Google Sheets tabs:
 | `recalculateAiValuationsAtOpen()` | Uses OpenAI Responses API with web search to recalculate AI valuations for the enabled watchlist. |
 | `recalculateWeeklyThreeMonthValuations()` | Uses OpenAI Responses API with web search to recalculate weekly three-month forward valuations. |
 | `runDailyStockScan()` | Locally ranks up to 100 enabled symbols and writes the latest ranked candidate list to `DailyStockScan`. |
+| `refreshAllStockUniverseWeekly()` | Refreshes the full stock universe from Fugle `/intraday/tickers` without OpenAI. |
+| `refreshStockScanPool500Daily()` | Ranks the full universe into a 500-symbol pool using local evidence and existing external-evidence sheets. |
 | `monitorBadNewsSignals()` | Uses OpenAI Responses API with web search to detect bad-news signals and write `BadNewsMonitor`. |
 | `refreshLimitUpExternalEvidence()` | Uses OpenAI Responses API with web search to populate `LimitUpExternalEvidence` during the Taiwan intraday window. |
 | `setupLimitUpExternalEvidenceSheet()` | Creates or refreshes the `LimitUpExternalEvidence` header row. |
@@ -125,6 +129,8 @@ Use the menu or run these functions manually:
 | `installAiValuationTriggerAt9()` | Daily AI valuation recalculation near 09:00 Asia/Taipei, with weekend guard. |
 | `installWeeklyThreeMonthValuationTrigger()` | Weekly three-month valuation recalculation near Sunday 18:00 Asia/Taipei. |
 | `installDailyStockScanTrigger()` | Daily 100-symbol local scan near 16:30 Asia/Taipei, after the daily stock recorder trigger. |
+| `installAllStockUniverseTrigger()` | Weekly full-universe refresh near Sunday 17:00 Asia/Taipei. |
+| `installStockScanPool500Trigger()` | Daily 500-symbol pool refresh near 16:20 Asia/Taipei, before the 100-symbol scan. |
 | `installBadNewsMonitorTrigger()` | Bad-news monitor every 15 minutes, with 08:00-14:00 Asia/Taipei weekday guard. |
 | `installLimitUpExternalEvidenceTrigger()` | Limit-up external evidence refresh every 30 minutes, with 08:30-13:35 Asia/Taipei weekday guard. |
 | `installMinuteReplayTriggerEvery1Minute()` | Minute replay collection every minute, with market-hour guard. |
