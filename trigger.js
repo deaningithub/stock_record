@@ -6,6 +6,7 @@ const TRIGGER_CONFIG = {
   gasRealtimeHandlerName: 'collectGasRealtimeSnapshots',
   aiValuationHandlerName: 'recalculateAiValuationsAtOpen',
   weeklyValuationHandlerName: 'recalculateWeeklyThreeMonthValuations',
+  dailyStockScanHandlerName: 'runDailyStockScan',
   badNewsHandlerName: 'monitorBadNewsSignals',
   limitUpEvidenceHandlerName: 'refreshLimitUpExternalEvidence',
   minIntervalDays: 1,
@@ -23,6 +24,7 @@ TRIGGER_CONFIG.managedHandlerNames = [
   TRIGGER_CONFIG.gasRealtimeHandlerName,
   TRIGGER_CONFIG.aiValuationHandlerName,
   TRIGGER_CONFIG.weeklyValuationHandlerName,
+  TRIGGER_CONFIG.dailyStockScanHandlerName,
   TRIGGER_CONFIG.badNewsHandlerName,
   TRIGGER_CONFIG.limitUpEvidenceHandlerName,
   'recordLatestDailyCandles'
@@ -43,6 +45,7 @@ function installRecommendedProjectTriggers() {
   installRecordTriggerEvery1Day();
   installAiValuationTriggerAt9();
   installWeeklyThreeMonthValuationTrigger();
+  installDailyStockScanTrigger();
   installBadNewsMonitorTrigger();
   installLimitUpExternalEvidenceTrigger();
   installGasRealtimeSnapshotTriggerEvery1Minute();
@@ -112,6 +115,19 @@ function installWeeklyThreeMonthValuationTrigger() {
     .create();
 
   log_('INFO', 'Installed weekly three-month valuation trigger near Sunday 18:00 Asia/Taipei.');
+}
+
+function installDailyStockScanTrigger() {
+  removeTriggersFor_(TRIGGER_CONFIG.dailyStockScanHandlerName);
+  ScriptApp.newTrigger(TRIGGER_CONFIG.dailyStockScanHandlerName)
+    .timeBased()
+    .atHour(16)
+    .nearMinute(30)
+    .everyDays(1)
+    .inTimezone(TRIGGER_CONFIG.timezone)
+    .create();
+
+  log_('INFO', 'Installed daily stock scan trigger near 16:30 Asia/Taipei every day. The handler skips weekends.');
 }
 
 function installBadNewsMonitorTrigger() {

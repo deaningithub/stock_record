@@ -5,6 +5,7 @@ const CONFIG = {
   quoteSheetName: 'IntradayQuotes',
   historySheetName: 'HistoricalDaily',
   minuteReplaySheetName: 'MinuteReplay',
+  stockScanSheetName: 'DailyStockScan',
   logSheetName: 'RunLog',
   minuteBackfillDays: 60,
   minuteBackfillBatchDays: 5,
@@ -40,7 +41,77 @@ const CONFIG = {
     { symbol: '6669', name: '緯穎', themes: 'ai_server, cloud_server, hot_rotation' },
     { symbol: '2317', name: '鴻海', themes: 'ai_server, ev, hot_rotation' },
     { symbol: '3711', name: '日月光投控', themes: 'semiconductor, ic_packaging, hot_rotation' },
-    { symbol: '1802', name: '台玻', themes: 'glass, traditional_industry' }
+    { symbol: '1802', name: '台玻', themes: 'glass, traditional_industry' },
+    { symbol: '2303', name: '聯電', themes: 'semiconductor, foundry, large_cap' },
+    { symbol: '2327', name: '國巨', themes: 'passive_components, large_cap' },
+    { symbol: '3037', name: '欣興', themes: 'pcb_ic_substrate, ai_server, hot_rotation' },
+    { symbol: '2881', name: '富邦金', themes: 'financial, large_cap' },
+    { symbol: '2345', name: '智邦', themes: 'networking, ai_server, hot_rotation' },
+    { symbol: '2891', name: '中信金', themes: 'financial, large_cap' },
+    { symbol: '2882', name: '國泰金', themes: 'financial, large_cap' },
+    { symbol: '2412', name: '中華電', themes: 'telecom, defensive, large_cap' },
+    { symbol: '2360', name: '致茂', themes: 'testing_equipment, ev, ai_server' },
+    { symbol: '1303', name: '南亞', themes: 'plastics, pcb_ccl, traditional_industry' },
+    { symbol: '2885', name: '元大金', themes: 'financial, brokerage, large_cap' },
+    { symbol: '2887', name: '台新金', themes: 'financial, large_cap' },
+    { symbol: '2357', name: '華碩', themes: 'pc, ai_pc, large_cap' },
+    { symbol: '2886', name: '兆豐金', themes: 'financial, large_cap' },
+    { symbol: '3443', name: '創意', themes: 'asic, semiconductor, hot_rotation' },
+    { symbol: '8046', name: '南電', themes: 'pcb_ic_substrate, ai_server, hot_rotation' },
+    { symbol: '3653', name: '健策', themes: 'cooling, semiconductor, ai_server, hot_rotation' },
+    { symbol: '2301', name: '光寶科', themes: 'power, ai_server, hot_rotation' },
+    { symbol: '4958', name: '臻鼎-KY', themes: 'pcb, ai_server, hot_rotation' },
+    { symbol: '2884', name: '玉山金', themes: 'financial, large_cap' },
+    { symbol: '3008', name: '大立光', themes: 'optical_lens, large_cap' },
+    { symbol: '2603', name: '長榮', themes: 'shipping, cyclical' },
+    { symbol: '2059', name: '川湖', themes: 'server_rails, ai_server, hot_rotation' },
+    { symbol: '2880', name: '華南金', themes: 'financial, large_cap' },
+    { symbol: '3665', name: '貿聯-KY', themes: 'cable_harness, ai_server, ev, hot_rotation' },
+    { symbol: '2395', name: '研華', themes: 'industrial_pc, edge_ai' },
+    { symbol: '2890', name: '永豐金', themes: 'financial, large_cap' },
+    { symbol: '2883', name: '開發金', themes: 'financial, large_cap' },
+    { symbol: '2892', name: '第一金', themes: 'financial, large_cap' },
+    { symbol: '1216', name: '統一', themes: 'consumer, defensive, large_cap' },
+    { symbol: '2449', name: '京元電子', themes: 'semiconductor_testing, ai_chip' },
+    { symbol: '3661', name: '世芯-KY', themes: 'asic, semiconductor, hot_rotation' },
+    { symbol: '3036', name: '文曄', themes: 'semiconductor_distribution, large_cap' },
+    { symbol: '5880', name: '合庫金', themes: 'financial, large_cap' },
+    { symbol: '4904', name: '遠傳', themes: 'telecom, defensive' },
+    { symbol: '3045', name: '台灣大', themes: 'telecom, defensive' },
+    { symbol: '3189', name: '景碩', themes: 'pcb_ic_substrate, semiconductor' },
+    { symbol: '2379', name: '瑞昱', themes: 'semiconductor, edge_ai' },
+    { symbol: '2356', name: '英業達', themes: 'ai_server, notebook, hot_rotation' },
+    { symbol: '3034', name: '聯詠', themes: 'display_driver, semiconductor' },
+    { symbol: '2337', name: '旺宏', themes: 'memory, hot_rotation' },
+    { symbol: '6515', name: '穎崴', themes: 'semiconductor_testing, ai_chip, hot_rotation' },
+    { symbol: '2002', name: '中鋼', themes: 'steel, traditional_industry' },
+    { symbol: '3533', name: '嘉澤', themes: 'connectors, ai_server' },
+    { symbol: '1590', name: '亞德客-KY', themes: 'automation, robotics' },
+    { symbol: '2207', name: '和泰車', themes: 'auto, traditional_industry' },
+    { symbol: '3044', name: '健鼎', themes: 'pcb, large_cap' },
+    { symbol: '2376', name: '技嘉', themes: 'ai_pc, server, hot_rotation' },
+    { symbol: '4938', name: '和碩', themes: 'ems, ai_pc, large_cap' },
+    { symbol: '6239', name: '力成', themes: 'semiconductor_packaging, memory' },
+    { symbol: '2912', name: '統一超', themes: 'consumer, defensive' },
+    { symbol: '2801', name: '彰銀', themes: 'financial, large_cap' },
+    { symbol: '2615', name: '萬海', themes: 'shipping, cyclical' },
+    { symbol: '6415', name: '矽力*-KY', themes: 'power_ic, semiconductor' },
+    { symbol: '2404', name: '漢唐', themes: 'semiconductor_equipment, facility' },
+    { symbol: '2888', name: '新光金', themes: 'financial, large_cap' },
+    { symbol: '2492', name: '華新科', themes: 'passive_components, hot_rotation' },
+    { symbol: '2324', name: '仁寶', themes: 'notebook, ai_pc' },
+    { symbol: '2618', name: '長榮航', themes: 'airline, tourism' },
+    { symbol: '5871', name: '中租-KY', themes: 'leasing, financial' },
+    { symbol: '3702', name: '大聯大', themes: 'semiconductor_distribution' },
+    { symbol: '5876', name: '上海商銀', themes: 'financial, large_cap' },
+    { symbol: '1504', name: '東元', themes: 'motor, robotics, power, hot_rotation' },
+    { symbol: '1101', name: '台泥', themes: 'cement, traditional_industry' },
+    { symbol: '1605', name: '華新', themes: 'cable, power, traditional_industry' },
+    { symbol: '2609', name: '陽明', themes: 'shipping, cyclical' },
+    { symbol: '6139', name: '亞翔', themes: 'semiconductor_equipment, facility' },
+    { symbol: '8210', name: '勤誠', themes: 'server_chassis, ai_server, hot_rotation' },
+    { symbol: '6531', name: '愛普*', themes: 'memory, semiconductor, hot_rotation' },
+    { symbol: '6789', name: '采鈺', themes: 'semiconductor, optical_sensor' }
   ],
   apiKeyProperties: ['FUGLE_API_KEY', 'FUGLE_APIKEY', 'FUGLE_TOKEN', 'FUGLE_KEY', 'FUGLE', 'fugle']
 };
@@ -58,6 +129,7 @@ function onOpen() {
     .addItem('Record latest daily candles', 'recordLatestDailyCandles')
     .addItem('Recalculate AI valuations', 'recalculateAiValuationsAtOpen')
     .addItem('Recalculate weekly 3-month valuations', 'recalculateWeeklyThreeMonthValuations')
+    .addItem('Run daily stock scan', 'runDailyStockScan')
     .addItem('Monitor bad-news signals', 'monitorBadNewsSignals')
     .addItem('Refresh limit-up external evidence', 'refreshLimitUpExternalEvidence')
     .addItem('Setup limit-up external evidence', 'setupLimitUpExternalEvidenceSheet')
@@ -72,6 +144,7 @@ function onOpen() {
     .addItem('Install GAS realtime snapshot trigger', 'installGasRealtimeSnapshotTrigger')
     .addItem('Install AI valuation trigger: 09:00', 'installAiValuationTriggerAt9')
     .addItem('Install weekly 3-month valuation trigger', 'installWeeklyThreeMonthValuationTrigger')
+    .addItem('Install daily stock scan trigger', 'installDailyStockScanTrigger')
     .addItem('Install bad-news monitor trigger', 'installBadNewsMonitorTrigger')
     .addItem('Install limit-up evidence trigger', 'installLimitUpExternalEvidenceTrigger')
     .addItem('Install minute replay trigger: every 1 minute', 'installMinuteReplayTriggerEvery1Minute')
@@ -87,6 +160,7 @@ function setupSheets() {
   const quoteSheet = getOrCreateSheet_(spreadsheet, CONFIG.quoteSheetName);
   const historySheet = getOrCreateSheet_(spreadsheet, CONFIG.historySheetName);
   const minuteReplaySheet = getOrCreateSheet_(spreadsheet, CONFIG.minuteReplaySheetName);
+  const stockScanSheet = getOrCreateSheet_(spreadsheet, CONFIG.stockScanSheetName);
   const logSheet = getOrCreateSheet_(spreadsheet, CONFIG.logSheetName);
   const aiValuationSheet = getOrCreateSheet_(spreadsheet, AI_VALUATION_CONFIG.sheetName);
   const weeklyAiValuationSheet = getOrCreateSheet_(spreadsheet, WEEKLY_AI_VALUATION_CONFIG.sheetName);
@@ -143,6 +217,7 @@ function setupSheets() {
     'source'
   ]);
 
+  setHeader_(stockScanSheet, getDailyStockScanHeaders_());
   setHeader_(logSheet, ['time', 'level', 'message']);
   setHeader_(aiValuationSheet, getAiValuationHeaders_());
   setHeader_(weeklyAiValuationSheet, getWeeklyAiValuationHeaders_());
