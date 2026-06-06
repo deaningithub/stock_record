@@ -7,6 +7,13 @@ const DAILY_STOCK_SCAN_CONFIG = {
   maxSymbols: 100,
   topPickCount: 20,
   minTradableScore: 55,
+  preferredThemePattern: /(ai_server|semiconductor|pcb|memory|robotics|power|heavy_electric|cooling|asic|hot_rotation|server|edge_ai|ai_pc)/,
+  snapshotMarkets: ['TSE', 'OTC'],
+  minUsefulTradeValue: 10000000,
+  fullLiquidityTradeValue: 1000000000,
+  freshExternalEvidenceHours: 12,
+  freshAiValuationHours: 48,
+  freshBadNewsHours: 36,
   universeSources: [
     { exchange: 'TWSE', market: 'TSE' },
     { exchange: 'TPEx', market: 'OTC' }
@@ -192,6 +199,10 @@ function getStockScanPool500Headers_() {
     'aiRating',
     'aiUpsidePct',
     'changePct',
+    'snapshotChangePct',
+    'snapshotTradeValue',
+    'snapshotMoverRank',
+    'snapshotActiveValueRank',
     'distanceToLimitPct',
     'reasons',
     'source'
@@ -209,6 +220,9 @@ function getDailyStockScanHeaders_() {
     'themes',
     'score',
     'action',
+    'setupType',
+    'riskFlag',
+    'poolScore',
     'rating',
     'lastPrice',
     'changePct',
@@ -242,7 +256,8 @@ function buildPoolEvidenceInputs_() {
     latestRealtime: getLatestSheetRowsBySymbol_(GAS_REALTIME_CONFIG.sheetName, 'symbol', 'recordedAt'),
     latestAiValuation: getLatestSheetRowsBySymbol_(AI_VALUATION_CONFIG.sheetName, 'symbol', 'generatedAt'),
     latestBadNews: getLatestSheetRowsBySymbol_(BAD_NEWS_CONFIG.sheetName, 'symbol', 'generatedAt'),
-    latestExternalEvidence: getLatestSheetRowsBySymbol_(LIMIT_UP_EXTERNAL_EVIDENCE_CONFIG.sheetName, 'symbol', 'checked_at')
+    latestExternalEvidence: getLatestSheetRowsBySymbol_(LIMIT_UP_EXTERNAL_EVIDENCE_CONFIG.sheetName, 'symbol', 'checked_at'),
+    snapshotEvidence: fetchFugleSnapshotEvidence_()
   };
 }
 
@@ -256,7 +271,8 @@ function buildStockScanPool500Row_(universeItem, inputs, scanAt) {
     realtime: inputs.latestRealtime[symbol] || {},
     valuation: inputs.latestAiValuation[symbol] || {},
     badNews: inputs.latestBadNews[symbol] || {},
-    external: inputs.latestExternalEvidence[symbol] || {}
+    external: inputs.latestExternalEvidence[symbol] || {},
+    snapshot: inputs.snapshotEvidence[symbol] || {}
   };
   const scoreResult = scoreStockPoolCandidate_(item, universeItem);
 
@@ -278,6 +294,10 @@ function buildStockScanPool500Row_(universeItem, inputs, scanAt) {
     item.valuation.rating || '',
     valueOrBlank_(item.valuation.upsidePct),
     firstNumber_(item.realtime.changePct, item.quote.changePercent),
+    valueOrBlank_(item.snapshot.changePercent),
+    valueOrBlank_(item.snapshot.tradeValue),
+    valueOrBlank_(item.snapshot.moverRank),
+    valueOrBlank_(item.snapshot.activeValueRank),
     valueOrBlank_(item.realtime.distanceToLimitPct),
     scoreResult.reasons.join('; '),
     'local_pool500_v1'
@@ -285,41 +305,52 @@ function buildStockScanPool500Row_(universeItem, inputs, scanAt) {
 }
 
 function scoreStockPoolCandidate_(item, universeItem) {
-  let score = 20;
+  let score = 5;
   const reasons = [];
 
   if (isCoreWatchlistSymbol_(item.symbol)) {
-    score += 35;
+    score += 24;
     reasons.push('current 100 seed');
   }
 
   const themeText = String(item.config.themes || '').toLowerCase();
-  if (/(ai_server|semiconductor|pcb|memory|robotics|power|heavy_electric|cooling|asic|hot_rotation)/.test(themeText)) {
-    score += 15;
+  if (DAILY_STOCK_SCAN_CONFIG.preferredThemePattern.test(themeText)) {
+    score += 12;
     reasons.push('preferred strategy theme');
   }
 
   const externalScore = Number(item.external.external_score);
-  if (!isNaN(externalScore)) {
-    score += Math.round(externalScore * 30);
+  if (!isNaN(externalScore) && isEvidenceFresh_(item.external.checked_at || item.external.news_checked_at, DAILY_STOCK_SCAN_CONFIG.freshExternalEvidenceHours)) {
+    score += Math.round(externalScore * 28);
     reasons.push('external evidence score');
+  } else if (!isNaN(externalScore)) {
+    score += Math.round(externalScore * 10);
+    reasons.push('stale external evidence');
   }
   if (item.external.trigger === true || String(item.external.trigger).toLowerCase() === 'true') {
-    score += 20;
+    score += 18;
     reasons.push('external trigger');
   }
 
+  score = addScore_(score, reasons, Number(item.snapshot.changePercent), 0, 8, 20, 'snapshot mover');
+  score = addScore_(score, reasons, Number(item.snapshot.tradeValue), DAILY_STOCK_SCAN_CONFIG.minUsefulTradeValue, DAILY_STOCK_SCAN_CONFIG.fullLiquidityTradeValue, 16, 'liquid active');
+  score = addRankScore_(score, reasons, Number(item.snapshot.moverRank), 120, 14, 'mover rank');
+  score = addRankScore_(score, reasons, Number(item.snapshot.activeValueRank), 160, 12, 'active value rank');
+
   const upsidePct = Number(item.valuation.upsidePct);
-  if (!isNaN(upsidePct)) {
+  if (!isNaN(upsidePct) && isEvidenceFresh_(item.valuation.generatedAt, DAILY_STOCK_SCAN_CONFIG.freshAiValuationHours)) {
     score += Math.max(-15, Math.min(20, Math.round(upsidePct)));
-    reasons.push('AI valuation exists');
+    reasons.push('fresh AI valuation');
+  } else if (!isNaN(upsidePct)) {
+    score += Math.max(-6, Math.min(8, Math.round(upsidePct / 2)));
+    reasons.push('stale AI valuation');
   }
 
   const rating = String(item.valuation.rating || '').toLowerCase();
-  if (rating === 'strong_buy') {
+  if (rating === 'strong_buy' && isEvidenceFresh_(item.valuation.generatedAt, DAILY_STOCK_SCAN_CONFIG.freshAiValuationHours)) {
     score += 15;
     reasons.push('AI strong buy');
-  } else if (rating === 'buy') {
+  } else if (rating === 'buy' && isEvidenceFresh_(item.valuation.generatedAt, DAILY_STOCK_SCAN_CONFIG.freshAiValuationHours)) {
     score += 10;
   } else if (rating === 'avoid' || rating === 'sell') {
     score -= 20;
@@ -331,13 +362,13 @@ function scoreStockPoolCandidate_(item, universeItem) {
   score = addScore_(score, reasons, Number(item.realtime.bookImbalance), 0.55, 0.8, 8, 'bid-side imbalance');
 
   const badNewsRisk = Number(item.badNews.riskScore || 0);
-  if (badNewsRisk >= BAD_NEWS_CONFIG.forceExitRiskScore) {
+  if (badNewsRisk >= BAD_NEWS_CONFIG.forceExitRiskScore && isEvidenceFresh_(item.badNews.generatedAt, DAILY_STOCK_SCAN_CONFIG.freshBadNewsHours)) {
     score -= 60;
     reasons.push('critical bad news');
-  } else if (badNewsRisk >= BAD_NEWS_CONFIG.blockEntryRiskScore) {
+  } else if (badNewsRisk >= BAD_NEWS_CONFIG.blockEntryRiskScore && isEvidenceFresh_(item.badNews.generatedAt, DAILY_STOCK_SCAN_CONFIG.freshBadNewsHours)) {
     score -= 40;
     reasons.push('bad news blocks entry');
-  } else if (badNewsRisk >= 50) {
+  } else if (badNewsRisk >= 50 && isEvidenceFresh_(item.badNews.generatedAt, DAILY_STOCK_SCAN_CONFIG.freshBadNewsHours)) {
     score -= 15;
     reasons.push('watch bad news');
   }
@@ -360,6 +391,7 @@ function buildDailyStockScanInputs_(symbols) {
   const latestAiValuation = getLatestSheetRowsBySymbol_(AI_VALUATION_CONFIG.sheetName, 'symbol', 'generatedAt');
   const latestBadNews = getLatestSheetRowsBySymbol_(BAD_NEWS_CONFIG.sheetName, 'symbol', 'generatedAt');
   const latestExternalEvidence = getLatestSheetRowsBySymbol_(LIMIT_UP_EXTERNAL_EVIDENCE_CONFIG.sheetName, 'symbol', 'checked_at');
+  const latestPool500 = getLatestSheetRowsBySymbol_(CONFIG.stockScanPool500SheetName, 'symbol', 'scanAt');
   const scanAt = new Date();
 
   return {
@@ -373,7 +405,8 @@ function buildDailyStockScanInputs_(symbols) {
       realtime: latestRealtime[symbol] || {},
       valuation: latestAiValuation[symbol] || {},
       badNews: latestBadNews[symbol] || {},
-      external: latestExternalEvidence[symbol] || {}
+      external: latestExternalEvidence[symbol] || {},
+      pool: latestPool500[symbol] || {}
     }))
   };
 }
@@ -381,6 +414,8 @@ function buildDailyStockScanInputs_(symbols) {
 function buildDailyStockScanRow_(item, inputs, index) {
   const scoreResult = scoreDailyStockCandidate_(item);
   const action = decideDailyStockScanAction_(scoreResult.score, item);
+  const setupType = classifyDailyStockSetup_(item, scoreResult.score);
+  const riskFlag = classifyDailyStockRisk_(item);
   const latestNews = item.external.news_summary || item.valuation.newsSummary || item.badNews.headlineSummary || '';
 
   return [
@@ -393,6 +428,9 @@ function buildDailyStockScanRow_(item, inputs, index) {
     item.config.themes || '',
     scoreResult.score,
     action,
+    setupType,
+    riskFlag,
+    valueOrBlank_(item.pool.score),
     item.valuation.rating || '',
     firstNumber_(item.realtime.lastPrice, item.quote.lastPrice, item.daily.close),
     firstNumber_(item.realtime.changePct, item.quote.changePercent),
@@ -473,30 +511,42 @@ function scoreDailyStockCandidate_(item) {
   }
 
   const externalScore = Number(external.external_score);
-  if (!isNaN(externalScore)) {
+  if (!isNaN(externalScore) && isEvidenceFresh_(external.checked_at || external.news_checked_at, DAILY_STOCK_SCAN_CONFIG.freshExternalEvidenceHours)) {
     score += Math.round(externalScore * 12);
     if (externalScore >= 0.7) {
       reasons.push('external evidence trigger zone');
     }
+  } else if (!isNaN(externalScore)) {
+    score += Math.round(externalScore * 4);
+    reasons.push('stale external evidence');
   }
   if (external.trigger === true || String(external.trigger).toLowerCase() === 'true') {
     score += 10;
     reasons.push('external trigger');
   }
 
+  const poolScore = Number(item.pool.score);
+  if (!isNaN(poolScore)) {
+    score += Math.round((poolScore - 50) / 8);
+    if (poolScore >= 75) {
+      reasons.push('high 500-pool score');
+    }
+  }
+
   const badNewsRisk = Number(badNews.riskScore || 0);
-  if (badNewsRisk >= BAD_NEWS_CONFIG.forceExitRiskScore) {
+  if (badNewsRisk >= BAD_NEWS_CONFIG.forceExitRiskScore && isEvidenceFresh_(badNews.generatedAt, DAILY_STOCK_SCAN_CONFIG.freshBadNewsHours)) {
     score -= 45;
     reasons.push('critical bad news');
-  } else if (badNewsRisk >= BAD_NEWS_CONFIG.blockEntryRiskScore) {
+  } else if (badNewsRisk >= BAD_NEWS_CONFIG.blockEntryRiskScore && isEvidenceFresh_(badNews.generatedAt, DAILY_STOCK_SCAN_CONFIG.freshBadNewsHours)) {
     score -= 30;
     reasons.push('bad news blocks entry');
-  } else if (badNewsRisk >= 50) {
+  } else if (badNewsRisk >= 50 && isEvidenceFresh_(badNews.generatedAt, DAILY_STOCK_SCAN_CONFIG.freshBadNewsHours)) {
     score -= 12;
     reasons.push('watch bad news');
   }
 
-  if (badNews.shouldBlockEntry === true || String(badNews.shouldBlockEntry).toLowerCase() === 'true') {
+  if ((badNews.shouldBlockEntry === true || String(badNews.shouldBlockEntry).toLowerCase() === 'true') &&
+      isEvidenceFresh_(badNews.generatedAt, DAILY_STOCK_SCAN_CONFIG.freshBadNewsHours)) {
     score -= 20;
     reasons.push('entry blocked');
   }
@@ -519,12 +569,78 @@ function addScore_(score, reasons, value, start, full, points, reason) {
   return score + delta;
 }
 
+function addRankScore_(score, reasons, rank, maxRank, points, reason) {
+  if (isNaN(rank) || rank < 1 || rank > maxRank) {
+    return score;
+  }
+  const delta = Math.round(points * (maxRank - rank + 1) / maxRank);
+  if (delta > 0) {
+    reasons.push(reason);
+  }
+  return score + delta;
+}
+
+function fetchFugleSnapshotEvidence_() {
+  const evidence = {};
+  DAILY_STOCK_SCAN_CONFIG.snapshotMarkets.forEach(market => {
+    mergeSnapshotEvidence_(evidence, fetchFugleSnapshotList_(`/snapshot/quotes/${market}`, {
+      type: 'COMMONSTOCK'
+    }), market, 'quote');
+    mergeSnapshotEvidence_(evidence, fetchFugleSnapshotList_(`/snapshot/movers/${market}`, {
+      direction: 'up',
+      change: 'percent',
+      type: 'COMMONSTOCK'
+    }), market, 'mover');
+    mergeSnapshotEvidence_(evidence, fetchFugleSnapshotList_(`/snapshot/actives/${market}`, {
+      trade: 'value',
+      type: 'COMMONSTOCK'
+    }), market, 'activeValue');
+  });
+  return evidence;
+}
+
+function fetchFugleSnapshotList_(path, query) {
+  try {
+    const result = fugleGet_(path, query);
+    return result.data || [];
+  } catch (error) {
+    log_('WARN', `Skipped Fugle snapshot evidence ${path}: ${error.message}`);
+    return [];
+  }
+}
+
+function mergeSnapshotEvidence_(evidence, rows, market, sourceType) {
+  rows.forEach((row, index) => {
+    const symbol = normalizeSymbol_(row.symbol);
+    if (!symbol) {
+      return;
+    }
+    if (!evidence[symbol]) {
+      evidence[symbol] = { symbol, market };
+    }
+    const target = evidence[symbol];
+    target.name = target.name || row.name || '';
+    target.changePercent = firstNumber_(target.changePercent, row.changePercent);
+    target.tradeVolume = firstNumber_(target.tradeVolume, row.tradeVolume);
+    target.tradeValue = firstNumber_(target.tradeValue, row.tradeValue);
+    target.lastUpdated = firstNumber_(target.lastUpdated, row.lastUpdated);
+    if (sourceType === 'mover' && !target.moverRank) {
+      target.moverRank = index + 1;
+    }
+    if (sourceType === 'activeValue' && !target.activeValueRank) {
+      target.activeValueRank = index + 1;
+    }
+  });
+}
+
 function decideDailyStockScanAction_(score, item) {
   const badNews = item.badNews;
-  if (badNews.shouldForceExit === true || String(badNews.shouldForceExit).toLowerCase() === 'true') {
+  if ((badNews.shouldForceExit === true || String(badNews.shouldForceExit).toLowerCase() === 'true') &&
+      isEvidenceFresh_(badNews.generatedAt, DAILY_STOCK_SCAN_CONFIG.freshBadNewsHours)) {
     return 'avoid_force_exit_risk';
   }
-  if (badNews.shouldBlockEntry === true || String(badNews.shouldBlockEntry).toLowerCase() === 'true') {
+  if ((badNews.shouldBlockEntry === true || String(badNews.shouldBlockEntry).toLowerCase() === 'true') &&
+      isEvidenceFresh_(badNews.generatedAt, DAILY_STOCK_SCAN_CONFIG.freshBadNewsHours)) {
     return 'avoid_blocked_by_bad_news';
   }
   if (score >= 75) {
@@ -534,6 +650,53 @@ function decideDailyStockScanAction_(score, item) {
     return 'watch';
   }
   return 'low_priority';
+}
+
+function classifyDailyStockSetup_(item, score) {
+  const distanceToLimit = Number(item.realtime.distanceToLimitPct);
+  const externalScore = Number(item.external.external_score);
+  const priceChange5m = Number(item.realtime.priceChange5m);
+  const bookImbalance = Number(item.realtime.bookImbalance);
+  const upsidePct = Number(item.valuation.upsidePct);
+  const poolScore = Number(item.pool.score);
+
+  if (!isNaN(distanceToLimit) && distanceToLimit >= 0 && distanceToLimit <= 3 &&
+      (!isNaN(bookImbalance) && bookImbalance >= 0.6 || !isNaN(externalScore) && externalScore >= 0.7)) {
+    return 'limit_up_chase';
+  }
+  if (!isNaN(priceChange5m) && priceChange5m >= 1.5 && !isNaN(bookImbalance) && bookImbalance >= 0.58) {
+    return 'intraday_momentum';
+  }
+  if (!isNaN(externalScore) && externalScore >= 0.7) {
+    return 'external_evidence';
+  }
+  if (!isNaN(upsidePct) && upsidePct >= 8 && score >= DAILY_STOCK_SCAN_CONFIG.minTradableScore) {
+    return 'valuation_momentum';
+  }
+  if (!isNaN(poolScore) && poolScore >= 75) {
+    return 'pool_leader';
+  }
+  return 'watchlist_candidate';
+}
+
+function classifyDailyStockRisk_(item) {
+  const badNews = item.badNews;
+  const badNewsRisk = Number(badNews.riskScore || 0);
+  const freshBadNews = isEvidenceFresh_(badNews.generatedAt, DAILY_STOCK_SCAN_CONFIG.freshBadNewsHours);
+  if ((badNews.shouldForceExit === true || String(badNews.shouldForceExit).toLowerCase() === 'true') && freshBadNews) {
+    return 'force_exit_risk';
+  }
+  if ((badNews.shouldBlockEntry === true || String(badNews.shouldBlockEntry).toLowerCase() === 'true') && freshBadNews) {
+    return 'block_entry';
+  }
+  if (badNewsRisk >= 50 && freshBadNews) {
+    return 'watch_bad_news';
+  }
+  const spreadPct = Number(item.realtime.spreadPct);
+  if (!isNaN(spreadPct) && spreadPct > 1) {
+    return 'wide_spread';
+  }
+  return 'normal';
 }
 
 function replaceDailyStockScanRows_(rows) {
@@ -597,6 +760,25 @@ function getStockScanPool500Symbols_() {
 function isCoreWatchlistSymbol_(symbol) {
   const normalized = normalizeSymbol_(symbol);
   return CONFIG.defaultSymbols.indexOf(normalized) !== -1;
+}
+
+function isEvidenceFresh_(value, maxHours) {
+  const date = normalizeScanDate_(value);
+  if (!date) {
+    return false;
+  }
+  return Date.now() - date.getTime() <= maxHours * 60 * 60 * 1000;
+}
+
+function normalizeScanDate_(value) {
+  if (Object.prototype.toString.call(value) === '[object Date]' && !isNaN(value.getTime())) {
+    return value;
+  }
+  if (value === undefined || value === null || value === '') {
+    return null;
+  }
+  const parsed = new Date(value);
+  return isNaN(parsed.getTime()) ? null : parsed;
 }
 
 function firstNumber_() {

@@ -14,7 +14,7 @@ This repository contains the Apps Script source code and strategy configuration 
 | `trigger.js` | Installs and removes Apps Script time-based triggers for daily stock recording, minute replay collection, realtime snapshots, after-close collection, and minute backfill continuation. |
 | `ai_valuation.js` | Recalculates morning AI valuations for enabled watchlist stocks using local sheet data, the prior 7 days of valuation history, and OpenAI web search for current Taiwan news, US market context, and catalyst reasoning. |
 | `weekly_ai_valuation.js` | Recalculates weekly three-month forward fair values using current news, sector catalysts, US-market read-through, and latest intraday valuation context. |
-| `daily_stock_scan.js` | Refreshes the full universe and 500-symbol pool, then ranks the 100-symbol daily shortlist using local daily, realtime, AI valuation, bad-news, and external-evidence signals. |
+| `daily_stock_scan.js` | Refreshes the full universe and 500-symbol pool, then ranks the 100-symbol daily shortlist using Fugle snapshot movers/actives/quotes plus local realtime, AI valuation, bad-news, and external-evidence signals. |
 | `bad_news_monitor.js` | Monitors current negative news, disclosures, downgrades, macro shocks, and US-market read-through, then writes risk signals to `BadNewsMonitor` for strategy risk controls. |
 | `limit_up_external_evidence.js` | Refreshes `LimitUpExternalEvidence` with AI/web-search external evidence, data freshness, material bad-news mapping, and local external-score/trigger calculation. |
 | `realtime_gas.js` | Collects realtime Fugle intraday quote snapshots and writes quote-derived features such as bid/ask, midpoint, spread percentage, book imbalance, micro price, trade volume, and last trade metadata. |
@@ -42,9 +42,9 @@ The code expects these Google Sheets tabs:
 | `DeanBacktestReport` | Summary report for Dean autostock strategies. |
 | `AIValuations` | Daily AI fair-value and intraday target estimates with news, US-market impact, limit-up plan, confidence, sources, and 7-day trend context for later strategy decisions. |
 | `WeeklyAIValuations` | Weekly AI three-month fair-value estimates with thesis, catalysts, risks, confidence, and sources. |
-| `DailyStockScan` | Daily local ranking of the 100-symbol shortlist from `StockScanPool500`, including top-pick flags, momentum, order-book, valuation, external-evidence, and bad-news fields. |
+| `DailyStockScan` | Daily local ranking of the 100-symbol shortlist from `StockScanPool500`, including top-pick flags, setup type, risk flag, momentum, order-book, valuation, external-evidence, and bad-news fields. |
 | `AllStockUniverse` | Weekly refreshed full market universe from Fugle ticker lists, including TWSE/TPEx normal equity tickers plus manual seeds. |
-| `StockScanPool500` | Daily refreshed 500-symbol candidate pool selected from the full universe using local/external evidence before the 100-symbol scan. |
+| `StockScanPool500` | Daily refreshed 500-symbol candidate pool selected from the full universe using Fugle snapshot market evidence and local/external evidence before the 100-symbol scan. |
 | `BadNewsMonitor` | Dedicated negative-news monitor output. High-risk rows block new entries, and critical rows can force exits. |
 | `LimitUpExternalEvidence` | Dedicated per-symbol per-date external evidence for limit-up setups, including news, institution, branch/main-force, margin-short/chip, freshness, material bad-news, external score, and trigger fields. |
 | `RunLog` | Runtime logs and API errors. |

@@ -49,9 +49,9 @@ AI/risk/external evidence tabs:
 
 - `AIValuations`: daily 09:00 intraday AI valuation and target.
 - `WeeklyAIValuations`: weekly three-month forward valuation.
-- `DailyStockScan`: local daily ranking for the 100-symbol shortlist from `StockScanPool500`, with top-pick flags and combined momentum/order-book/AI/external/bad-news scoring.
+- `DailyStockScan`: local daily ranking for the 100-symbol shortlist from `StockScanPool500`, with top-pick flags, setup type, risk flag, and combined momentum/order-book/AI/external/bad-news scoring.
 - `AllStockUniverse`: weekly refreshed full-market universe from Fugle ticker lists.
-- `StockScanPool500`: daily refreshed 500-symbol pool selected from `AllStockUniverse` before the 100-symbol daily scan.
+- `StockScanPool500`: daily refreshed 500-symbol pool selected from `AllStockUniverse` before the 100-symbol daily scan; now uses Fugle snapshot quotes/movers/actives as market-wide evidence.
 - `BadNewsMonitor`: negative-news risk signals used to block entries or force exits.
 - `LimitUpExternalEvidence`: per-symbol per-date external evidence for limit-up setups.
 
@@ -120,6 +120,13 @@ The current workflow has three scan layers:
 - `AllStockUniverse`: weekly full-market pool from Fugle tickers.
 - `StockScanPool500`: daily 500-symbol pool, weighted toward current 100 seeds, strategy themes, existing external evidence, AI valuation rows, realtime features, and bad-news penalties.
 - `DailyStockScan`: daily 100-symbol shortlist from the 500 pool.
+
+Selection optimization note:
+
+- The 500 pool should not depend only on symbols that already have realtime/AI rows; it also uses Fugle snapshot movers, actives, and quotes so full-market candidates can surface.
+- Evidence freshness is enforced: external evidence is strongest within 12 hours, AI valuation within 48 hours, and bad-news penalties within 36 hours.
+- The 100 shortlist now labels `setupType` (`limit_up_chase`, `intraday_momentum`, `external_evidence`, `valuation_momentum`, `pool_leader`, `watchlist_candidate`) and `riskFlag`.
+- No new OpenAI call was added for this optimization.
 
 The current 100-symbol seed list preserves the original 30-symbol watchlist and adds large-cap/current AI, semiconductor, PCB, server, financial, telecom, shipping, and traditional-industry names researched from Taiwan market-cap/index context as of 2026-06-06.
 
