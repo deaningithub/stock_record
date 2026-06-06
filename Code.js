@@ -66,7 +66,7 @@ function onOpen() {
     .addItem('Continue minute backfill now', 'continueMinuteReplayBackfill')
     .addItem('Stop minute backfill', 'stopMinuteReplayBackfill')
     .addSeparator()
-    .addItem('Install recommended triggers', 'installRecommendedProjectTriggers')
+    .addItem('One-click setup recommended triggers', 'oneClickSetupProjectTriggers')
     .addItem('Audit project triggers', 'auditProjectTriggers')
     .addItem('Install stock trigger: every 1 day', 'installRecordTriggerEvery1Day')
     .addItem('Install GAS realtime snapshot trigger', 'installGasRealtimeSnapshotTrigger')

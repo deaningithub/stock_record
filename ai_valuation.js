@@ -4,7 +4,7 @@ const AI_VALUATION_CONFIG = {
   timezone: 'Asia/Taipei',
   openAiBaseUrl: 'https://api.openai.com/v1',
   openAiModel: 'gpt-5',
-  maxSymbolsPerRun: 27,
+  maxSymbolsPerRun: 29,
   valuationHistoryDays: 7,
   openAiKeyProperties: ['OPENAI_API_KEY', 'OPENAI_APIKEY', 'OPENAI_KEY', 'OPENAI'],
   usMarketContext: [

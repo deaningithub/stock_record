@@ -15,6 +15,19 @@ const TRIGGER_CONFIG = {
   timezone: 'Asia/Taipei'
 };
 
+TRIGGER_CONFIG.managedHandlerNames = [
+  TRIGGER_CONFIG.handlerName,
+  TRIGGER_CONFIG.minuteReplayHandlerName,
+  TRIGGER_CONFIG.afterCloseMinuteReplayHandlerName,
+  TRIGGER_CONFIG.minuteBackfillHandlerName,
+  TRIGGER_CONFIG.gasRealtimeHandlerName,
+  TRIGGER_CONFIG.aiValuationHandlerName,
+  TRIGGER_CONFIG.weeklyValuationHandlerName,
+  TRIGGER_CONFIG.badNewsHandlerName,
+  TRIGGER_CONFIG.limitUpEvidenceHandlerName,
+  'recordLatestDailyCandles'
+];
+
 function recordStockInfo() {
   recordIntradayQuotes();
   recordLatestDailyCandles();
@@ -25,17 +38,23 @@ function installRecordTriggerEvery1Day() {
 }
 
 function installRecommendedProjectTriggers() {
-  removeTriggersFor_('recordLatestDailyCandles');
+  setupSheets();
+  removeManagedProjectTriggers_();
   installRecordTriggerEvery1Day();
   installAiValuationTriggerAt9();
   installWeeklyThreeMonthValuationTrigger();
   installBadNewsMonitorTrigger();
   installLimitUpExternalEvidenceTrigger();
-  installGasRealtimeSnapshotTrigger();
-  installMinuteReplayTriggerEvery5Minutes();
+  installGasRealtimeSnapshotTriggerEvery1Minute();
+  installMinuteReplayTriggerEvery1Minute();
   installAfterCloseMinuteReplayTrigger();
   auditProjectTriggers();
-  log_('INFO', 'Installed recommended project triggers and removed legacy standalone daily-candle trigger.');
+  getSpreadsheet_().toast('Recommended Taiwan stock triggers installed.', 'Taiwan Stock', 5);
+  log_('INFO', 'Installed recommended project triggers with one-click setup. Realtime snapshots and minute replay run every 1 minute during guarded market windows.');
+}
+
+function oneClickSetupProjectTriggers() {
+  installRecommendedProjectTriggers();
 }
 
 function auditProjectTriggers() {
@@ -56,6 +75,10 @@ function installMinuteReplayTriggerEvery5Minutes() {
 }
 
 function installGasRealtimeSnapshotTrigger() {
+  installGasRealtimeSnapshotTriggerEvery1Minute();
+}
+
+function installGasRealtimeSnapshotTriggerEvery1Minute() {
   removeTriggersFor_(TRIGGER_CONFIG.gasRealtimeHandlerName);
   ScriptApp.newTrigger(TRIGGER_CONFIG.gasRealtimeHandlerName)
     .timeBased()
@@ -132,6 +155,11 @@ function installMinuteReplayBackfillTrigger() {
     .create();
 
   log_('INFO', 'Installed minute replay backfill continuation trigger every 5 minutes.');
+}
+
+function removeManagedProjectTriggers_() {
+  TRIGGER_CONFIG.managedHandlerNames.forEach(handlerName => removeTriggersFor_(handlerName));
+  log_('INFO', `Removed managed project triggers before one-click install: ${TRIGGER_CONFIG.managedHandlerNames.join(', ')}.`);
 }
 
 function installRecordTriggerEveryNDays_(days) {
