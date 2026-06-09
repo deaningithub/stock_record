@@ -63,10 +63,11 @@ function installV123ProjectTriggers() {
   installRecordTriggerEvery1Day();
   installAiValuationTriggerAt9();
   installWeeklyThreeMonthValuationTrigger();
+  installBadNewsMonitorTriggerV123_();
   installLimitUpExternalEvidenceTriggerV123_();
   auditProjectTriggers();
   getSpreadsheet_().toast('V1.2.3 data triggers installed.', 'Taiwan Stock', 5);
-  log_('INFO', 'Installed V1.2.3 recommended data triggers: AIValuations daily before 08:30, WeeklyAIValuations weekly before 08:30, and LimitUpExternalEvidence daily before 08:30. DailyStockScan and BadNewsMonitor are not scheduled for V1.2.3.');
+  log_('INFO', 'Installed V1.2.3 recommended data triggers: AIValuations daily before 08:30, WeeklyAIValuations weekly before 08:30, BadNewsMonitor top21 pre-open, and LimitUpExternalEvidence daily before 08:30. DailyStockScan is not scheduled for V1.2.3.');
 }
 
 function installV24ProjectTriggers() {
@@ -205,7 +206,7 @@ function installBadNewsMonitorTriggerV123_() {
     .inTimezone(TRIGGER_CONFIG.timezone)
     .create();
 
-  log_('INFO', 'Installed optional V1.2.3 bad-news monitor trigger near 06:30 Asia/Taipei every day. This is not installed by the V1.2.3 recommended trigger setup.');
+  log_('INFO', 'Installed V1.2.3 bad-news monitor trigger near 06:30 Asia/Taipei every day, using DailyStockScan top21 when available and targeting completion before LimitUpExternalEvidence.');
 }
 
 function installLimitUpExternalEvidenceTrigger() {
@@ -248,7 +249,7 @@ function installBadNewsMonitorTriggerV24_() {
     .inTimezone(TRIGGER_CONFIG.timezone)
     .create();
 
-  log_('INFO', 'Installed V2.4 bad-news monitor triggers near 07:50 and 10:55 Asia/Taipei every day.');
+  log_('INFO', 'Installed V2.4 bad-news monitor triggers near 07:50 and 10:55 Asia/Taipei every day, using DailyStockScan top21 when available.');
 }
 
 function installLimitUpExternalEvidenceTriggerV24_() {

@@ -6,7 +6,7 @@ const BAD_NEWS_CONFIG = {
   openAiBaseUrl: 'https://api.openai.com/v1',
   openAiModel: 'gpt-5',
   maxSymbolsPerRun: 8,
-  symbolUniverseLimit: 27,
+  symbolUniverseLimit: 21,
   continuationMinutes: 5,
   maxRunMs: 240000,
   maxOutputTokens: 6000,
@@ -48,7 +48,7 @@ function runBadNewsSignalsBatch_(continuation) {
       return 0;
     }
 
-    const symbols = getEnabledSymbols_().slice(0, BAD_NEWS_CONFIG.symbolUniverseLimit);
+    const symbols = getBadNewsMonitorSymbols_();
     if (!symbols.length) {
       log_('WARN', 'Skipped bad-news monitor because no enabled symbols were found.');
       return 0;
@@ -111,6 +111,7 @@ function setupBadNewsMonitorSheet_() {
 
 function buildBadNewsInputs_(symbols) {
   const configRows = getConfigRowsBySymbol_();
+  const dailyScanRows = getDailyStockScanRowsForSymbols_(symbols);
   const latestValuations = getLatestSheetRowsBySymbol_(AI_VALUATION_CONFIG.sheetName, 'symbol', 'generatedAt');
   const latestQuotes = getLatestSheetRowsBySymbol_(CONFIG.quoteSheetName, 'symbol', 'recordedAt', 10000);
   const generatedAt = new Date();
@@ -125,6 +126,7 @@ function buildBadNewsInputs_(symbols) {
         symbol,
         name: config.name || '',
         themes: config.themes || '',
+        dailyScan: dailyScanRows[symbol] || {},
         latestValuation: latestValuations[symbol] || {},
         latestQuote: latestQuotes[symbol] || {}
       };
@@ -185,6 +187,7 @@ function buildBadNewsPrompt_(inputs) {
     '',
     'Search current news, exchange disclosures, company announcements, analyst downgrades, macro/geopolitical shocks, US market read-through, supply-chain weakness, legal/regulatory issues, credit stress, dilution, customer cuts, production disruption, accounting issues, and ETF/sector-specific negatives.',
     'For each symbol, decide whether there is a credible bad-news signal that should block new entries or force exit existing positions.',
+    'The monitored symbols are the DailyStockScan top 21 ranked names when available. Use dailyScan context to prioritize active top-ranked candidates.',
     'Use latest valuation and quote context, but do not let bullish valuation override material negative evidence.',
     '',
     'Risk scoring guide:',
@@ -256,6 +259,115 @@ function writeBadNewsMonitorResult_(result, inputs) {
 
 function isBadNewsMonitorWindow_(date) {
   return Boolean(getBadNewsMonitorSessionKey_(date));
+}
+
+function getBadNewsMonitorSymbols_() {
+  const topScanSymbols = getDailyStockScanTopSymbols_(BAD_NEWS_CONFIG.symbolUniverseLimit);
+  if (topScanSymbols.length) {
+    log_('INFO', `Bad-news monitor using DailyStockScan top ${topScanSymbols.length} symbol(s): ${topScanSymbols.join(', ')}.`);
+    return topScanSymbols;
+  }
+
+  const fallbackSymbols = getEnabledSymbols_().slice(0, BAD_NEWS_CONFIG.symbolUniverseLimit);
+  log_('WARN', `Bad-news monitor fell back to Config enabled symbols because DailyStockScan has no top-ranked rows. symbolCount=${fallbackSymbols.length}.`);
+  return fallbackSymbols;
+}
+
+function getDailyStockScanTopSymbols_(limit) {
+  const sheet = getOrCreateSheet_(getSpreadsheet_(), CONFIG.stockScanSheetName);
+  const lastRow = sheet.getLastRow();
+  const lastColumn = sheet.getLastColumn();
+  if (lastRow < 2 || lastColumn < 1) {
+    return [];
+  }
+
+  const headers = sheet.getRange(1, 1, 1, lastColumn).getValues()[0].map(header => String(header));
+  const symbolIndex = headers.indexOf('symbol');
+  const rankIndex = headers.indexOf('rank');
+  const topPickIndex = headers.indexOf('isTopPick');
+  const scoreIndex = headers.indexOf('score');
+  if (symbolIndex === -1) {
+    return [];
+  }
+
+  const values = sheet.getRange(2, 1, lastRow - 1, lastColumn).getValues();
+  const seen = {};
+  return values
+    .map((row, rowIndex) => ({
+      symbol: normalizeSymbol_(row[symbolIndex]),
+      rank: Number(rankIndex === -1 ? rowIndex + 1 : row[rankIndex]),
+      isTopPick: topPickIndex !== -1 && (row[topPickIndex] === true || String(row[topPickIndex]).toLowerCase() === 'true'),
+      score: Number(scoreIndex === -1 ? 0 : row[scoreIndex]),
+      rowIndex
+    }))
+    .filter(item => {
+      if (!item.symbol || seen[item.symbol]) {
+        return false;
+      }
+      seen[item.symbol] = true;
+      return true;
+    })
+    .sort((left, right) => {
+      const leftRank = Number.isFinite(left.rank) && left.rank > 0 ? left.rank : 999999;
+      const rightRank = Number.isFinite(right.rank) && right.rank > 0 ? right.rank : 999999;
+      if (leftRank !== rightRank) {
+        return leftRank - rightRank;
+      }
+      if (left.isTopPick !== right.isTopPick) {
+        return left.isTopPick ? -1 : 1;
+      }
+      if (Number.isFinite(left.score) && Number.isFinite(right.score) && left.score !== right.score) {
+        return right.score - left.score;
+      }
+      return left.rowIndex - right.rowIndex;
+    })
+    .slice(0, limit)
+    .map(item => item.symbol);
+}
+
+function getDailyStockScanRowsForSymbols_(symbols) {
+  const wanted = {};
+  symbols.forEach(symbol => {
+    const normalized = normalizeSymbol_(symbol);
+    if (normalized) {
+      wanted[normalized] = true;
+    }
+  });
+
+  const sheet = getOrCreateSheet_(getSpreadsheet_(), CONFIG.stockScanSheetName);
+  const lastRow = sheet.getLastRow();
+  const lastColumn = sheet.getLastColumn();
+  if (lastRow < 2 || lastColumn < 1) {
+    return {};
+  }
+
+  const headers = sheet.getRange(1, 1, 1, lastColumn).getValues()[0].map(header => String(header));
+  const symbolIndex = headers.indexOf('symbol');
+  const rankIndex = headers.indexOf('rank');
+  if (symbolIndex === -1) {
+    return {};
+  }
+
+  const values = sheet.getRange(2, 1, lastRow - 1, lastColumn).getValues();
+  const latest = {};
+  values.forEach((row, rowIndex) => {
+    const symbol = normalizeSymbol_(row[symbolIndex]);
+    if (!symbol || !wanted[symbol]) {
+      return;
+    }
+
+    const current = latest[symbol];
+    const rank = Number(rankIndex === -1 ? rowIndex + 1 : row[rankIndex]);
+    const currentRank = current ? Number(current.rank) : NaN;
+    if (!current || !Number.isFinite(currentRank) || (Number.isFinite(rank) && rank < currentRank)) {
+      const item = {};
+      headers.forEach((header, columnIndex) => {
+        item[header] = normalizeAiInputValue_(row[columnIndex]);
+      });
+      latest[symbol] = item;
+    }
+  });
+  return latest;
 }
 
 function getBadNewsMonitorSessionKey_(date) {
