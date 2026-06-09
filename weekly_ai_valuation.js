@@ -1,24 +1,83 @@
 const WEEKLY_AI_VALUATION_CONFIG = {
   sheetName: 'WeeklyAIValuations',
   handlerName: 'recalculateWeeklyThreeMonthValuations',
+  continuationHandlerName: 'continueWeeklyThreeMonthValuations',
   timezone: 'Asia/Taipei',
   horizonMonths: 3,
-  maxSymbolsPerRun: 27,
-  maxOutputTokens: 20000
+  maxSymbolsPerRun: 6,
+  symbolUniverseLimit: 27,
+  continuationMinutes: 5,
+  maxOutputTokens: 8000
 };
 
 function recalculateWeeklyThreeMonthValuations() {
+  return runWeeklyThreeMonthValuationBatch_(false);
+}
+
+function continueWeeklyThreeMonthValuations() {
+  return runWeeklyThreeMonthValuationBatch_(true);
+}
+
+function runWeeklyThreeMonthValuationBatch_(continuation) {
   setupWeeklyAiValuationSheet_();
-  const symbols = getEnabledSymbols_().slice(0, WEEKLY_AI_VALUATION_CONFIG.maxSymbolsPerRun);
-  if (!symbols.length) {
-    log_('WARN', 'Skipped weekly three-month valuation because no enabled symbols were found.');
-    return;
+
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(5000)) {
+    log_('WARN', 'Skipped weekly three-month valuation because the previous run is still active.');
+    return 0;
   }
 
-  const inputs = buildWeeklyValuationInputs_(symbols);
-  const result = callOpenAiWeeklyValuation_(inputs);
-  writeWeeklyValuationResult_(result, inputs);
-  log_('INFO', `Weekly three-month AI valuation recalculated for ${result.valuations.length} symbol(s).`);
+  try {
+    const symbols = getEnabledSymbols_().slice(0, WEEKLY_AI_VALUATION_CONFIG.symbolUniverseLimit);
+    const today = Utilities.formatDate(new Date(), WEEKLY_AI_VALUATION_CONFIG.timezone, 'yyyy-MM-dd');
+    const properties = PropertiesService.getScriptProperties();
+    const runDateKey = 'WEEKLY_VALUATION_RUN_DATE';
+    const cursorKey = 'WEEKLY_VALUATION_SYMBOL_INDEX';
+
+    if (!continuation || properties.getProperty(runDateKey) !== today) {
+      properties.setProperty(runDateKey, today);
+      properties.setProperty(cursorKey, '0');
+    }
+
+    if (!symbols.length) {
+      log_('WARN', 'Skipped weekly three-month valuation because no enabled symbols were found.');
+      clearWeeklyThreeMonthValuationContinuation_();
+      return 0;
+    }
+
+    let cursor = Number(properties.getProperty(cursorKey) || '0');
+    if (!Number.isInteger(cursor) || cursor < 0 || cursor >= symbols.length) {
+      cursor = 0;
+    }
+    const batch = symbols.slice(cursor, cursor + WEEKLY_AI_VALUATION_CONFIG.maxSymbolsPerRun);
+    if (!batch.length) {
+      clearWeeklyThreeMonthValuationContinuation_();
+      return 0;
+    }
+
+    try {
+      const inputs = buildWeeklyValuationInputs_(batch);
+      const result = callOpenAiWeeklyValuation_(inputs);
+      writeWeeklyValuationResult_(result, inputs);
+      cursor += batch.length;
+      properties.setProperty(cursorKey, String(cursor));
+      log_('INFO', `Weekly three-month AI valuation recalculated for ${result.valuations.length} symbol(s), cursor=${Math.min(cursor, symbols.length)}/${symbols.length}.`);
+    } catch (error) {
+      log_('ERROR', `Weekly three-month valuation batch failed at cursor=${cursor}: ${error.message}`);
+      installWeeklyThreeMonthValuationContinuationTrigger_();
+      return 0;
+    }
+
+    if (cursor < symbols.length) {
+      installWeeklyThreeMonthValuationContinuationTrigger_();
+    } else {
+      clearWeeklyThreeMonthValuationContinuation_();
+      log_('INFO', `Weekly three-month AI valuation completed all ${symbols.length} symbol(s) for ${today}.`);
+    }
+    return batch.length;
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function setupWeeklyAiValuationSheet_() {
@@ -29,7 +88,7 @@ function setupWeeklyAiValuationSheet_() {
 function buildWeeklyValuationInputs_(symbols) {
   const configRows = getConfigRowsBySymbol_();
   const latestDaily = getLatestSheetRowsBySymbol_(CONFIG.historySheetName, 'symbol', 'date');
-  const latestAiValuation = getLatestSheetRowsBySymbol_(AI_VALUATION_CONFIG.sheetName, 'symbol', 'generatedAt');
+  const latestAiValuation = getLatestSheetRowsBySymbol_(AI_VALUATION_CONFIG.sheetName, 'symbol', 'generatedAt', 2000);
   const generatedAt = new Date();
 
   return {
@@ -51,16 +110,9 @@ function buildWeeklyValuationInputs_(symbols) {
 }
 
 function callOpenAiWeeklyValuation_(inputs) {
-  const response = UrlFetchApp.fetch(`${AI_VALUATION_CONFIG.openAiBaseUrl}/responses`, {
-    method: 'post',
-    muteHttpExceptions: true,
-    contentType: 'application/json',
-    headers: {
-      Authorization: `Bearer ${getOpenAiApiKey_()}`
-    },
-    payload: JSON.stringify({
+  const payload = {
       model: AI_VALUATION_CONFIG.openAiModel,
-      reasoning: { effort: 'medium' },
+      reasoning: { effort: 'low' },
       max_output_tokens: WEEKLY_AI_VALUATION_CONFIG.maxOutputTokens,
       tools: [{
         type: 'web_search',
@@ -91,18 +143,14 @@ function callOpenAiWeeklyValuation_(inputs) {
           schema: getWeeklyValuationJsonSchema_()
         }
       }
-    })
-  });
+  };
 
-  const status = response.getResponseCode();
-  const text = response.getContentText();
-  if (status < 200 || status >= 300) {
-    const error = new Error(`OpenAI weekly valuation failed (${status}): ${text}`);
-    error.statusCode = status;
-    error.responseText = text;
-    throw error;
-  }
-  return parseWeeklyValuationResponse_(JSON.parse(text));
+  return parseWeeklyValuationResponse_(fetchOpenAiResponsesWithRetry_(
+    `${AI_VALUATION_CONFIG.openAiBaseUrl}/responses`,
+    payload,
+    getOpenAiApiKey_(),
+    'weekly valuation'
+  ));
 }
 
 function buildWeeklyValuationPrompt_(inputs) {
@@ -169,6 +217,21 @@ function writeWeeklyValuationResult_(result, inputs) {
   if (rows.length) {
     appendRows_(WEEKLY_AI_VALUATION_CONFIG.sheetName, rows);
   }
+}
+
+function installWeeklyThreeMonthValuationContinuationTrigger_() {
+  removeTriggersFor_(WEEKLY_AI_VALUATION_CONFIG.continuationHandlerName);
+  ScriptApp.newTrigger(WEEKLY_AI_VALUATION_CONFIG.continuationHandlerName)
+    .timeBased()
+    .everyMinutes(WEEKLY_AI_VALUATION_CONFIG.continuationMinutes)
+    .create();
+  log_('INFO', `Installed weekly three-month valuation continuation trigger every ${WEEKLY_AI_VALUATION_CONFIG.continuationMinutes} minutes.`);
+}
+
+function clearWeeklyThreeMonthValuationContinuation_() {
+  removeTriggersFor_(WEEKLY_AI_VALUATION_CONFIG.continuationHandlerName);
+  const properties = PropertiesService.getScriptProperties();
+  properties.deleteProperty('WEEKLY_VALUATION_SYMBOL_INDEX');
 }
 
 function getWeeklyAiValuationHeaders_() {

@@ -4,6 +4,8 @@ const GAS_REALTIME_CONFIG = {
   timezone: 'Asia/Taipei',
   source: 'fugle_intraday_quote_rest',
   minRequestGapMs: 300,
+  batchSize: 12,
+  maxRunMs: 240000,
   historyLookbackRows: 5000,
   maxHistoryStalenessMs: 15 * 60 * 1000
 };
@@ -23,11 +25,30 @@ function collectGasRealtimeSnapshots() {
     }
 
     const symbols = getEnabledSymbols_();
+    if (!symbols.length) {
+      log_('WARN', 'Skipped realtime quote collection because no enabled symbols were found.');
+      return;
+    }
+    const cursor = createSymbolBatchCursor_(
+      symbols,
+      'GAS_REALTIME_SYMBOL_INDEX',
+      GAS_REALTIME_CONFIG.batchSize,
+      GAS_REALTIME_CONFIG.maxRunMs
+    );
+    const batch = [];
+    while (cursor.hasNext()) {
+      batch.push(cursor.next());
+    }
+    if (!batch.length) {
+      log_('INFO', `Skipped realtime quote collection because the batch cursor has no symbols ready; nextCursor=${cursor.index()}/${symbols.length}.`);
+      return;
+    }
+
     const recordedAt = new Date();
-    const historyContext = buildRealtimeHistoryContext_(symbols);
+    const historyContext = buildRealtimeHistoryContext_(batch);
     const rows = [];
 
-    symbols.forEach(symbol => {
+    batch.forEach(symbol => {
       try {
         Utilities.sleep(GAS_REALTIME_CONFIG.minRequestGapMs);
         const quote = fugleGet_(`/intraday/quote/${encodeURIComponent(symbol)}`);
@@ -40,7 +61,8 @@ function collectGasRealtimeSnapshots() {
     if (rows.length) {
       appendRows_(GAS_REALTIME_CONFIG.sheetName, rows);
     }
-    log_('INFO', `Recorded ${rows.length} realtime feature snapshot row(s).`);
+    cursor.save();
+    log_('INFO', `Recorded ${rows.length} realtime feature snapshot row(s) from ${batch.length} symbol(s), nextCursor=${cursor.index()}/${symbols.length}.`);
   } finally {
     lock.releaseLock();
   }

@@ -1,10 +1,13 @@
 const AI_VALUATION_CONFIG = {
   sheetName: 'AIValuations',
   handlerName: 'recalculateAiValuationsAtOpen',
+  continuationHandlerName: 'continueAiValuationsAtOpen',
   timezone: 'Asia/Taipei',
   openAiBaseUrl: 'https://api.openai.com/v1',
   openAiModel: 'gpt-5',
-  maxSymbolsPerRun: 29,
+  maxSymbolsPerRun: 8,
+  symbolUniverseLimit: 29,
+  continuationMinutes: 5,
   valuationHistoryDays: 7,
   openAiKeyProperties: ['OPENAI_API_KEY', 'OPENAI_APIKEY', 'OPENAI_KEY', 'OPENAI'],
   usMarketContext: [
@@ -17,22 +20,78 @@ const AI_VALUATION_CONFIG = {
 };
 
 function recalculateAiValuationsAtOpen() {
+  return runAiValuationBatch_(false);
+}
+
+function continueAiValuationsAtOpen() {
+  return runAiValuationBatch_(true);
+}
+
+function runAiValuationBatch_(continuation) {
   setupAiValuationSheet_();
   if (isWeekendTaipei_(new Date())) {
     log_('INFO', 'Skipped AI valuation recalculation on weekend.');
+    clearAiValuationContinuation_();
     return;
   }
 
-  const symbols = getEnabledSymbols_().slice(0, AI_VALUATION_CONFIG.maxSymbolsPerRun);
-  if (!symbols.length) {
-    log_('WARN', 'Skipped AI valuation recalculation because no enabled symbols were found.');
-    return;
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(5000)) {
+    log_('WARN', 'Skipped AI valuation recalculation because the previous run is still active.');
+    return 0;
   }
 
-  const inputs = buildAiValuationInputs_(symbols);
-  const valuationResult = callOpenAiValuation_(inputs);
-  writeAiValuationResult_(valuationResult, inputs);
-  log_('INFO', `AI valuation recalculated for ${valuationResult.valuations.length} symbol(s).`);
+  try {
+    const symbols = getEnabledSymbols_().slice(0, AI_VALUATION_CONFIG.symbolUniverseLimit);
+    const today = Utilities.formatDate(new Date(), AI_VALUATION_CONFIG.timezone, 'yyyy-MM-dd');
+    const properties = PropertiesService.getScriptProperties();
+    const runDateKey = 'AI_VALUATION_RUN_DATE';
+    const cursorKey = 'AI_VALUATION_SYMBOL_INDEX';
+
+    if (!continuation || properties.getProperty(runDateKey) !== today) {
+      properties.setProperty(runDateKey, today);
+      properties.setProperty(cursorKey, '0');
+    }
+
+    if (!symbols.length) {
+      log_('WARN', 'Skipped AI valuation recalculation because no enabled symbols were found.');
+      clearAiValuationContinuation_();
+      return 0;
+    }
+
+    let cursor = Number(properties.getProperty(cursorKey) || '0');
+    if (!Number.isInteger(cursor) || cursor < 0 || cursor >= symbols.length) {
+      cursor = 0;
+    }
+    const batch = symbols.slice(cursor, cursor + AI_VALUATION_CONFIG.maxSymbolsPerRun);
+    if (!batch.length) {
+      clearAiValuationContinuation_();
+      return 0;
+    }
+
+    try {
+      const inputs = buildAiValuationInputs_(batch);
+      const valuationResult = callOpenAiValuation_(inputs);
+      writeAiValuationResult_(valuationResult, inputs);
+      cursor += batch.length;
+      properties.setProperty(cursorKey, String(cursor));
+      log_('INFO', `AI valuation recalculated for ${valuationResult.valuations.length} symbol(s), cursor=${Math.min(cursor, symbols.length)}/${symbols.length}.`);
+    } catch (error) {
+      log_('ERROR', `AI valuation batch failed at cursor=${cursor}: ${error.message}`);
+      installAiValuationContinuationTrigger_();
+      return 0;
+    }
+
+    if (cursor < symbols.length) {
+      installAiValuationContinuationTrigger_();
+    } else {
+      clearAiValuationContinuation_();
+      log_('INFO', `AI valuation completed all ${symbols.length} symbol(s) for ${today}.`);
+    }
+    return batch.length;
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function setupAiValuationSheet_() {
@@ -43,8 +102,8 @@ function setupAiValuationSheet_() {
 function buildAiValuationInputs_(symbols) {
   const configRows = getConfigRowsBySymbol_();
   const latestDaily = getLatestSheetRowsBySymbol_(CONFIG.historySheetName, 'symbol', 'date');
-  const latestQuote = getLatestSheetRowsBySymbol_(CONFIG.quoteSheetName, 'symbol', 'recordedAt');
-  const latestRealtime = getLatestSheetRowsBySymbol_(GAS_REALTIME_CONFIG.sheetName, 'symbol', 'recordedAt');
+  const latestQuote = getLatestSheetRowsBySymbol_(CONFIG.quoteSheetName, 'symbol', 'recordedAt', 10000);
+  const latestRealtime = getLatestSheetRowsBySymbol_(GAS_REALTIME_CONFIG.sheetName, 'symbol', 'recordedAt', GAS_REALTIME_CONFIG.historyLookbackRows);
   const valuationHistory = getAiValuationHistoryBySymbol_(symbols, AI_VALUATION_CONFIG.valuationHistoryDays);
   const generatedAt = new Date();
 
@@ -70,17 +129,10 @@ function buildAiValuationInputs_(symbols) {
 
 function callOpenAiValuation_(inputs) {
   const apiKey = getOpenAiApiKey_();
-  const response = UrlFetchApp.fetch(`${AI_VALUATION_CONFIG.openAiBaseUrl}/responses`, {
-    method: 'post',
-    muteHttpExceptions: true,
-    contentType: 'application/json',
-    headers: {
-      Authorization: `Bearer ${apiKey}`
-    },
-    payload: JSON.stringify({
+  const payload = {
       model: AI_VALUATION_CONFIG.openAiModel,
-      reasoning: { effort: 'medium' },
-      max_output_tokens: 20000,
+    reasoning: { effort: 'low' },
+    max_output_tokens: 9000,
       tools: [{
         type: 'web_search',
         user_location: {
@@ -111,19 +163,14 @@ function callOpenAiValuation_(inputs) {
           schema: getAiValuationJsonSchema_()
         }
       }
-    })
-  });
+  };
 
-  const status = response.getResponseCode();
-  const text = response.getContentText();
-  if (status < 200 || status >= 300) {
-    const error = new Error(`OpenAI valuation request failed (${status}): ${text}`);
-    error.statusCode = status;
-    error.responseText = text;
-    throw error;
-  }
-
-  return parseOpenAiValuationResponse_(JSON.parse(text));
+  return parseOpenAiValuationResponse_(fetchOpenAiResponsesWithRetry_(
+    `${AI_VALUATION_CONFIG.openAiBaseUrl}/responses`,
+    payload,
+    apiKey,
+    'valuation'
+  ));
 }
 
 function buildAiValuationPrompt_(inputs) {
@@ -241,22 +288,26 @@ function getConfigRowsBySymbol_() {
   return result;
 }
 
-function getLatestSheetRowsBySymbol_(sheetName, symbolHeader, sortHeader) {
+function getLatestSheetRowsBySymbol_(sheetName, symbolHeader, sortHeader, maxDataRows) {
   const sheet = getOrCreateSheet_(getSpreadsheet_(), sheetName);
-  const values = sheet.getDataRange().getValues();
-  if (values.length < 2) {
+  const lastRow = sheet.getLastRow();
+  const lastColumn = sheet.getLastColumn();
+  if (lastRow < 2 || lastColumn < 1) {
     return {};
   }
 
-  const headers = values[0].map(header => String(header));
+  const headers = sheet.getRange(1, 1, 1, lastColumn).getValues()[0].map(header => String(header));
   const symbolIndex = headers.indexOf(symbolHeader);
   const sortIndex = headers.indexOf(sortHeader);
   if (symbolIndex === -1 || sortIndex === -1) {
     return {};
   }
 
+  const boundedRows = Number(maxDataRows || 0);
+  const startRow = boundedRows > 0 ? Math.max(2, lastRow - boundedRows + 1) : 2;
+  const values = sheet.getRange(startRow, 1, lastRow - startRow + 1, lastColumn).getValues();
   const latest = {};
-  values.slice(1).forEach(row => {
+  values.forEach(row => {
     const symbol = normalizeSymbol_(row[symbolIndex]);
     if (!symbol) {
       return;
@@ -366,6 +417,59 @@ function getOpenAiApiKey_() {
     }
   }
   throw new Error(`Missing OpenAI API key. Set one script property: ${AI_VALUATION_CONFIG.openAiKeyProperties.join(', ')}`);
+}
+
+function fetchOpenAiResponsesWithRetry_(url, payload, apiKey, contextLabel) {
+  const maxAttempts = 2;
+  let lastError = null;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const response = UrlFetchApp.fetch(url, {
+      method: 'post',
+      muteHttpExceptions: true,
+      contentType: 'application/json',
+      headers: {
+        Authorization: `Bearer ${apiKey}`
+      },
+      payload: JSON.stringify(payload)
+    });
+    const status = response.getResponseCode();
+    const text = response.getContentText();
+    if (status >= 200 && status < 300) {
+      try {
+        return JSON.parse(text);
+      } catch (error) {
+        throw new Error(`OpenAI ${contextLabel} response envelope JSON parse failed: ${error.message}. bodyLength=${text.length}`);
+      }
+    }
+
+    lastError = new Error(`OpenAI ${contextLabel} request failed (${status}): ${text}`);
+    lastError.statusCode = status;
+    lastError.responseText = text;
+    if (!isRetryableOpenAiStatus_(status) || attempt === maxAttempts) {
+      throw lastError;
+    }
+    Utilities.sleep(10000 * attempt);
+  }
+  throw lastError;
+}
+
+function isRetryableOpenAiStatus_(status) {
+  return [408, 429, 500, 502, 503, 504].indexOf(Number(status)) !== -1;
+}
+
+function installAiValuationContinuationTrigger_() {
+  removeTriggersFor_(AI_VALUATION_CONFIG.continuationHandlerName);
+  ScriptApp.newTrigger(AI_VALUATION_CONFIG.continuationHandlerName)
+    .timeBased()
+    .everyMinutes(AI_VALUATION_CONFIG.continuationMinutes)
+    .create();
+  log_('INFO', `Installed AI valuation continuation trigger every ${AI_VALUATION_CONFIG.continuationMinutes} minutes.`);
+}
+
+function clearAiValuationContinuation_() {
+  removeTriggersFor_(AI_VALUATION_CONFIG.continuationHandlerName);
+  const properties = PropertiesService.getScriptProperties();
+  properties.deleteProperty('AI_VALUATION_SYMBOL_INDEX');
 }
 
 function getAiValuationHeaders_() {

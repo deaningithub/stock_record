@@ -5,12 +5,17 @@ const TRIGGER_CONFIG = {
   minuteBackfillHandlerName: 'continueMinuteReplayBackfill',
   gasRealtimeHandlerName: 'collectGasRealtimeSnapshots',
   aiValuationHandlerName: 'recalculateAiValuationsAtOpen',
+  aiValuationContinuationHandlerName: 'continueAiValuationsAtOpen',
   weeklyValuationHandlerName: 'recalculateWeeklyThreeMonthValuations',
+  weeklyValuationContinuationHandlerName: 'continueWeeklyThreeMonthValuations',
   allStockUniverseHandlerName: 'refreshAllStockUniverseWeekly',
   stockScanPool500HandlerName: 'refreshStockScanPool500Daily',
   dailyStockScanHandlerName: 'runDailyStockScan',
   badNewsHandlerName: 'monitorBadNewsSignals',
+  badNewsContinuationHandlerName: 'continueBadNewsSignals',
   limitUpEvidenceHandlerName: 'refreshLimitUpExternalEvidence',
+  limitUpEvidenceContinuationHandlerName: 'continueLimitUpExternalEvidence',
+  profileModePropertyName: 'TRIGGER_PROFILE_MODE',
   minIntervalDays: 1,
   maxIntervalDays: 5,
   hour: 16,
@@ -25,12 +30,16 @@ TRIGGER_CONFIG.managedHandlerNames = [
   TRIGGER_CONFIG.minuteBackfillHandlerName,
   TRIGGER_CONFIG.gasRealtimeHandlerName,
   TRIGGER_CONFIG.aiValuationHandlerName,
+  TRIGGER_CONFIG.aiValuationContinuationHandlerName,
   TRIGGER_CONFIG.weeklyValuationHandlerName,
+  TRIGGER_CONFIG.weeklyValuationContinuationHandlerName,
   TRIGGER_CONFIG.allStockUniverseHandlerName,
   TRIGGER_CONFIG.stockScanPool500HandlerName,
   TRIGGER_CONFIG.dailyStockScanHandlerName,
   TRIGGER_CONFIG.badNewsHandlerName,
+  TRIGGER_CONFIG.badNewsContinuationHandlerName,
   TRIGGER_CONFIG.limitUpEvidenceHandlerName,
+  TRIGGER_CONFIG.limitUpEvidenceContinuationHandlerName,
   'recordLatestDailyCandles'
 ];
 
@@ -44,26 +53,39 @@ function installRecordTriggerEvery1Day() {
 }
 
 function installRecommendedProjectTriggers() {
+  installV123ProjectTriggers();
+}
+
+function installV123ProjectTriggers() {
   setupSheets();
   removeManagedProjectTriggers_();
+  setTriggerProfileMode_('v123');
   installRecordTriggerEvery1Day();
   installAiValuationTriggerAt9();
   installWeeklyThreeMonthValuationTrigger();
+  installLimitUpExternalEvidenceTriggerV123_();
+  auditProjectTriggers();
+  getSpreadsheet_().toast('V1.2.3 data triggers installed.', 'Taiwan Stock', 5);
+  log_('INFO', 'Installed V1.2.3 recommended data triggers: AIValuations daily before 08:30, WeeklyAIValuations weekly before 08:30, and LimitUpExternalEvidence daily before 08:30. DailyStockScan and BadNewsMonitor are not scheduled for V1.2.3.');
+}
+
+function installV24ProjectTriggers() {
+  setupSheets();
+  removeManagedProjectTriggers_();
+  setTriggerProfileMode_('v24');
+  installRecordTriggerEvery1Day();
   installAllStockUniverseTrigger();
   installStockScanPool500Trigger();
   installDailyStockScanTrigger();
-  installBadNewsMonitorTrigger();
-  installLimitUpExternalEvidenceTrigger();
-  installGasRealtimeSnapshotTriggerEvery1Minute();
-  installMinuteReplayTriggerEvery1Minute();
-  installAfterCloseMinuteReplayTrigger();
+  installBadNewsMonitorTriggerV24_();
+  installLimitUpExternalEvidenceTriggerV24_();
   auditProjectTriggers();
-  getSpreadsheet_().toast('Recommended Taiwan stock triggers installed.', 'Taiwan Stock', 5);
-  log_('INFO', 'Installed recommended project triggers with one-click setup. Realtime snapshots and minute replay run every 1 minute during guarded market windows.');
+  getSpreadsheet_().toast('V2.4 data triggers installed.', 'Taiwan Stock', 5);
+  log_('INFO', 'Installed V2.4 recommended data triggers: AllStockUniverse weekly, StockScanPool500 daily before 08:30, DailyStockScan before 09:00, BadNewsMonitor pre-open and midday, and LimitUpExternalEvidence pre-open and midday. AIValuations and WeeklyAIValuations are not scheduled for V2.4 openai mode.');
 }
 
 function oneClickSetupProjectTriggers() {
-  installRecommendedProjectTriggers();
+  installV123ProjectTriggers();
 }
 
 function auditProjectTriggers() {
@@ -99,28 +121,30 @@ function installGasRealtimeSnapshotTriggerEvery1Minute() {
 
 function installAiValuationTriggerAt9() {
   removeTriggersFor_(TRIGGER_CONFIG.aiValuationHandlerName);
+  removeTriggersFor_(TRIGGER_CONFIG.aiValuationContinuationHandlerName);
   ScriptApp.newTrigger(TRIGGER_CONFIG.aiValuationHandlerName)
     .timeBased()
-    .atHour(9)
+    .atHour(7)
     .nearMinute(0)
     .everyDays(1)
     .inTimezone(TRIGGER_CONFIG.timezone)
     .create();
 
-  log_('INFO', 'Installed AI valuation trigger near 09:00 Asia/Taipei every day. The handler skips weekends.');
+  log_('INFO', 'Installed V1.2.3 AI valuation trigger near 07:00 Asia/Taipei every day, targeting completion before 08:30. The handler skips weekends.');
 }
 
 function installWeeklyThreeMonthValuationTrigger() {
   removeTriggersFor_(TRIGGER_CONFIG.weeklyValuationHandlerName);
+  removeTriggersFor_(TRIGGER_CONFIG.weeklyValuationContinuationHandlerName);
   ScriptApp.newTrigger(TRIGGER_CONFIG.weeklyValuationHandlerName)
     .timeBased()
-    .onWeekDay(ScriptApp.WeekDay.SUNDAY)
-    .atHour(18)
-    .nearMinute(0)
+    .onWeekDay(ScriptApp.WeekDay.MONDAY)
+    .atHour(6)
+    .nearMinute(30)
     .inTimezone(TRIGGER_CONFIG.timezone)
     .create();
 
-  log_('INFO', 'Installed weekly three-month valuation trigger near Sunday 18:00 Asia/Taipei.');
+  log_('INFO', 'Installed V1.2.3 weekly three-month valuation trigger near Monday 06:30 Asia/Taipei, targeting completion before 08:30 on the first trading day of the week.');
 }
 
 function installAllStockUniverseTrigger() {
@@ -140,46 +164,112 @@ function installStockScanPool500Trigger() {
   removeTriggersFor_(TRIGGER_CONFIG.stockScanPool500HandlerName);
   ScriptApp.newTrigger(TRIGGER_CONFIG.stockScanPool500HandlerName)
     .timeBased()
-    .atHour(16)
-    .nearMinute(20)
+    .atHour(7)
+    .nearMinute(30)
     .everyDays(1)
     .inTimezone(TRIGGER_CONFIG.timezone)
     .create();
 
-  log_('INFO', 'Installed 500-stock scan pool trigger near 16:20 Asia/Taipei every day, before the 100-stock daily scan.');
+  log_('INFO', 'Installed 500-stock scan pool trigger near 07:30 Asia/Taipei every day.');
 }
 
 function installDailyStockScanTrigger() {
   removeTriggersFor_(TRIGGER_CONFIG.dailyStockScanHandlerName);
   ScriptApp.newTrigger(TRIGGER_CONFIG.dailyStockScanHandlerName)
     .timeBased()
-    .atHour(16)
+    .atHour(8)
+    .nearMinute(45)
+    .everyDays(1)
+    .inTimezone(TRIGGER_CONFIG.timezone)
+    .create();
+
+  log_('INFO', 'Installed daily stock scan trigger near 08:45 Asia/Taipei every day. The handler skips weekends.');
+}
+
+function installBadNewsMonitorTrigger() {
+  if (getTriggerProfileMode_() === 'v24') {
+    installBadNewsMonitorTriggerV24_();
+    return;
+  }
+  installBadNewsMonitorTriggerV123_();
+}
+
+function installBadNewsMonitorTriggerV123_() {
+  removeTriggersFor_(TRIGGER_CONFIG.badNewsHandlerName);
+  removeTriggersFor_(TRIGGER_CONFIG.badNewsContinuationHandlerName);
+  ScriptApp.newTrigger(TRIGGER_CONFIG.badNewsHandlerName)
+    .timeBased()
+    .atHour(6)
     .nearMinute(30)
     .everyDays(1)
     .inTimezone(TRIGGER_CONFIG.timezone)
     .create();
 
-  log_('INFO', 'Installed daily stock scan trigger near 16:30 Asia/Taipei every day. The handler skips weekends.');
-}
-
-function installBadNewsMonitorTrigger() {
-  removeTriggersFor_(TRIGGER_CONFIG.badNewsHandlerName);
-  ScriptApp.newTrigger(TRIGGER_CONFIG.badNewsHandlerName)
-    .timeBased()
-    .everyMinutes(15)
-    .create();
-
-  log_('INFO', 'Installed bad-news monitor trigger every 15 minutes. The handler skips outside 08:00-14:00 Asia/Taipei weekdays.');
+  log_('INFO', 'Installed optional V1.2.3 bad-news monitor trigger near 06:30 Asia/Taipei every day. This is not installed by the V1.2.3 recommended trigger setup.');
 }
 
 function installLimitUpExternalEvidenceTrigger() {
+  if (getTriggerProfileMode_() === 'v24') {
+    installLimitUpExternalEvidenceTriggerV24_();
+    return;
+  }
+  installLimitUpExternalEvidenceTriggerV123_();
+}
+
+function installLimitUpExternalEvidenceTriggerV123_() {
   removeTriggersFor_(TRIGGER_CONFIG.limitUpEvidenceHandlerName);
+  removeTriggersFor_(TRIGGER_CONFIG.limitUpEvidenceContinuationHandlerName);
   ScriptApp.newTrigger(TRIGGER_CONFIG.limitUpEvidenceHandlerName)
     .timeBased()
-    .everyMinutes(30)
+    .atHour(7)
+    .nearMinute(45)
+    .everyDays(1)
+    .inTimezone(TRIGGER_CONFIG.timezone)
     .create();
 
-  log_('INFO', 'Installed limit-up external evidence trigger every 30 minutes. The handler skips outside 08:30-13:35 Asia/Taipei weekdays.');
+  log_('INFO', 'Installed V1.2.3 limit-up external evidence trigger near 07:45 Asia/Taipei every day, targeting completion before 08:30. Continuation triggers finish the morning batch session.');
+}
+
+function installBadNewsMonitorTriggerV24_() {
+  removeTriggersFor_(TRIGGER_CONFIG.badNewsHandlerName);
+  removeTriggersFor_(TRIGGER_CONFIG.badNewsContinuationHandlerName);
+  ScriptApp.newTrigger(TRIGGER_CONFIG.badNewsHandlerName)
+    .timeBased()
+    .atHour(7)
+    .nearMinute(50)
+    .everyDays(1)
+    .inTimezone(TRIGGER_CONFIG.timezone)
+    .create();
+  ScriptApp.newTrigger(TRIGGER_CONFIG.badNewsHandlerName)
+    .timeBased()
+    .atHour(10)
+    .nearMinute(55)
+    .everyDays(1)
+    .inTimezone(TRIGGER_CONFIG.timezone)
+    .create();
+
+  log_('INFO', 'Installed V2.4 bad-news monitor triggers near 07:50 and 10:55 Asia/Taipei every day.');
+}
+
+function installLimitUpExternalEvidenceTriggerV24_() {
+  removeTriggersFor_(TRIGGER_CONFIG.limitUpEvidenceHandlerName);
+  removeTriggersFor_(TRIGGER_CONFIG.limitUpEvidenceContinuationHandlerName);
+  ScriptApp.newTrigger(TRIGGER_CONFIG.limitUpEvidenceHandlerName)
+    .timeBased()
+    .atHour(8)
+    .nearMinute(0)
+    .everyDays(1)
+    .inTimezone(TRIGGER_CONFIG.timezone)
+    .create();
+  ScriptApp.newTrigger(TRIGGER_CONFIG.limitUpEvidenceHandlerName)
+    .timeBased()
+    .atHour(11)
+    .nearMinute(15)
+    .everyDays(1)
+    .inTimezone(TRIGGER_CONFIG.timezone)
+    .create();
+
+  log_('INFO', 'Installed V2.4 limit-up external evidence triggers near 08:00 and 11:15 Asia/Taipei every day. Continuation triggers finish each batch session.');
 }
 
 function installAfterCloseMinuteReplayTrigger() {
@@ -208,6 +298,35 @@ function installMinuteReplayBackfillTrigger() {
 function removeManagedProjectTriggers_() {
   TRIGGER_CONFIG.managedHandlerNames.forEach(handlerName => removeTriggersFor_(handlerName));
   log_('INFO', `Removed managed project triggers before one-click install: ${TRIGGER_CONFIG.managedHandlerNames.join(', ')}.`);
+}
+
+function setTriggerProfileMode_(mode) {
+  const normalized = String(mode || '').toLowerCase() === 'v24' ? 'v24' : 'v123';
+  const properties = PropertiesService.getScriptProperties();
+  properties.setProperty(TRIGGER_CONFIG.profileModePropertyName, normalized);
+  clearTriggerProfileRunState_();
+  log_('INFO', `Set trigger profile mode to ${normalized}.`);
+}
+
+function getTriggerProfileMode_() {
+  const value = PropertiesService.getScriptProperties().getProperty(TRIGGER_CONFIG.profileModePropertyName);
+  return String(value || '').toLowerCase() === 'v24' ? 'v24' : 'v123';
+}
+
+function clearTriggerProfileRunState_() {
+  const properties = PropertiesService.getScriptProperties();
+  [
+    'AI_VALUATION_RUN_DATE',
+    'AI_VALUATION_SYMBOL_INDEX',
+    'WEEKLY_VALUATION_RUN_DATE',
+    'WEEKLY_VALUATION_SYMBOL_INDEX',
+    'BAD_NEWS_ACTIVE_SESSION',
+    'BAD_NEWS_COMPLETED_SESSION',
+    'BAD_NEWS_SYMBOL_INDEX',
+    'LIMIT_UP_EXTERNAL_EVIDENCE_ACTIVE_SESSION',
+    'LIMIT_UP_EXTERNAL_EVIDENCE_COMPLETED_SESSION',
+    'LIMIT_UP_EXTERNAL_EVIDENCE_SYMBOL_INDEX'
+  ].forEach(name => properties.deleteProperty(name));
 }
 
 function installRecordTriggerEveryNDays_(days) {

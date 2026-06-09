@@ -11,36 +11,38 @@ const CONFIG = {
   logSheetName: 'RunLog',
   minuteBackfillDays: 60,
   minuteBackfillBatchDays: 5,
+  minuteReplayBatchSize: 8,
+  minuteReplayMaxRunMs: 240000,
   fugleHistoricalRequestGapMs: 1100,
   fugleRateLimitRetryMs: 61000,
   watchlist: [
-    { symbol: '2382', name: '廣達', themes: 'ai_server, hot_rotation' },
+    { symbol: '2382', name: '廣達', themes: 'ai_server, cloud_server, ai_datacenter, compute_infrastructure, hot_rotation' },
     { symbol: '1301', name: '台塑', themes: 'plastics, traditional_industry' },
     { symbol: '1304', name: '台聚', themes: 'plastics, petrochemical, traditional_industry' },
     { symbol: '1326', name: '台化', themes: 'plastics, traditional_industry' },
     { symbol: '6505', name: '台塑化', themes: 'petrochemical, traditional_industry' },
     { symbol: '2408', name: '南亞科', themes: 'memory, hot_rotation' },
     { symbol: '1513', name: '中興電', themes: 'power, heavy_electric, hot_rotation' },
-    { symbol: '3163', name: '波若威', themes: 'optical_cpo, hot_rotation' },
+    { symbol: '3163', name: '波若威', themes: 'optical_cpo, optical_communication, cpo, quantum_photonics, ai_datacenter, hot_rotation' },
     { symbol: '2344', name: '華邦電', themes: 'memory, hot_rotation' },
     { symbol: '3481', name: '群創', themes: 'panel, hot_rotation' },
-    { symbol: '2313', name: '華通', themes: 'pcb_ccl, hot_rotation' },
-    { symbol: '3491', name: '昇達科', themes: 'satellite, communications, hot_rotation' },
+    { symbol: '2313', name: '華通', themes: 'pcb_ccl, high_frequency_pcb, leo_satellite, ai_server, hot_rotation' },
+    { symbol: '3491', name: '昇達科', themes: 'leo_satellite, satellite_ground_equipment, rf, communications, space_ai, lunar_space, hot_rotation' },
     { symbol: '5274', name: '信驊', themes: 'asic, semiconductor, hot_rotation' },
     { symbol: '3017', name: '奇鋐', themes: 'cooling, ai_server, hot_rotation' },
-    { symbol: '6285', name: '啟碁', themes: 'communications, networking' },
+    { symbol: '6285', name: '啟碁', themes: 'communications, networking, satellite_terminal, leo_satellite, cloud_networking' },
     { symbol: '2368', name: '金像電', themes: 'pcb_ccl, ai_server, hot_rotation' },
     { symbol: '00981A', name: '主動統一台股增長', themes: 'active_etf, hot_rotation' },
     { symbol: '2359', name: '所羅門', themes: 'robotics, automation, hot_rotation' },
     { symbol: '2464', name: '盟立', themes: 'robotics, automation' },
-    { symbol: '2383', name: '台光電', themes: 'pcb_ccl, ai_server, hot_rotation' },
+    { symbol: '2383', name: '台光電', themes: 'pcb_ccl, high_frequency_pcb, ai_server, leo_satellite, hot_rotation' },
     { symbol: '2454', name: '聯發科', themes: 'semiconductor, edge_ai, hot_rotation' },
-    { symbol: '3231', name: '緯創', themes: 'ai_server, hot_rotation' },
+    { symbol: '3231', name: '緯創', themes: 'ai_server, cloud_server, ai_datacenter, compute_infrastructure, hot_rotation' },
     { symbol: '1519', name: '華城', themes: 'heavy_electric, power, hot_rotation' },
     { symbol: '2409', name: '友達', themes: 'panel, hot_rotation' },
     { symbol: '2330', name: '台積電', themes: 'semiconductor, ai_chip, hot_rotation' },
-    { symbol: '2308', name: '台達電', themes: 'power, heavy_electric, ai_server, ev, hot_rotation' },
-    { symbol: '6669', name: '緯穎', themes: 'ai_server, cloud_server, hot_rotation' },
+    { symbol: '2308', name: '台達電', themes: 'power, heavy_electric, ai_power_infrastructure, ai_server, ev, robotics, datacenter, hot_rotation' },
+    { symbol: '6669', name: '緯穎', themes: 'ai_server, cloud_server, ai_datacenter, compute_infrastructure, hot_rotation' },
     { symbol: '2317', name: '鴻海', themes: 'ai_server, ev, hot_rotation' },
     { symbol: '3711', name: '日月光投控', themes: 'semiconductor, ic_packaging, hot_rotation' },
     { symbol: '1802', name: '台玻', themes: 'glass, traditional_industry' },
@@ -48,11 +50,11 @@ const CONFIG = {
     { symbol: '2327', name: '國巨', themes: 'passive_components, large_cap' },
     { symbol: '3037', name: '欣興', themes: 'pcb_ic_substrate, ai_server, hot_rotation' },
     { symbol: '2881', name: '富邦金', themes: 'financial, large_cap' },
-    { symbol: '2345', name: '智邦', themes: 'networking, ai_server, hot_rotation' },
+    { symbol: '2345', name: '智邦', themes: 'networking, cloud_networking, ai_server, ai_datacenter, compute_infrastructure, hot_rotation' },
     { symbol: '2891', name: '中信金', themes: 'financial, large_cap' },
     { symbol: '2882', name: '國泰金', themes: 'financial, large_cap' },
     { symbol: '2412', name: '中華電', themes: 'telecom, defensive, large_cap' },
-    { symbol: '2360', name: '致茂', themes: 'testing_equipment, ev, ai_server' },
+    { symbol: '2360', name: '致茂', themes: 'testing_equipment, ev, ai_server, robotics, precision_equipment' },
     { symbol: '1303', name: '南亞', themes: 'plastics, pcb_ccl, traditional_industry' },
     { symbol: '2885', name: '元大金', themes: 'financial, brokerage, large_cap' },
     { symbol: '2887', name: '台新金', themes: 'financial, large_cap' },
@@ -60,16 +62,16 @@ const CONFIG = {
     { symbol: '2886', name: '兆豐金', themes: 'financial, large_cap' },
     { symbol: '3443', name: '創意', themes: 'asic, semiconductor, hot_rotation' },
     { symbol: '8046', name: '南電', themes: 'pcb_ic_substrate, ai_server, hot_rotation' },
-    { symbol: '3653', name: '健策', themes: 'cooling, semiconductor, ai_server, hot_rotation' },
-    { symbol: '2301', name: '光寶科', themes: 'power, ai_server, hot_rotation' },
+    { symbol: '3653', name: '健策', themes: 'cooling, thermal, semiconductor, ai_server, ai_datacenter, hot_rotation' },
+    { symbol: '2301', name: '光寶科', themes: 'power, ai_power_infrastructure, ai_server, cloud_server, ev, hot_rotation' },
     { symbol: '4958', name: '臻鼎-KY', themes: 'pcb, ai_server, hot_rotation' },
     { symbol: '2884', name: '玉山金', themes: 'financial, large_cap' },
     { symbol: '3008', name: '大立光', themes: 'optical_lens, large_cap' },
     { symbol: '2603', name: '長榮', themes: 'shipping, cyclical' },
     { symbol: '2059', name: '川湖', themes: 'server_rails, ai_server, hot_rotation' },
     { symbol: '2880', name: '華南金', themes: 'financial, large_cap' },
-    { symbol: '3665', name: '貿聯-KY', themes: 'cable_harness, ai_server, ev, hot_rotation' },
-    { symbol: '2395', name: '研華', themes: 'industrial_pc, edge_ai' },
+    { symbol: '3665', name: '貿聯-KY', themes: 'cable_harness, ai_server, ev, robotics, drone, hot_rotation' },
+    { symbol: '2395', name: '研華', themes: 'industrial_pc, edge_ai, robotics, cloud_infrastructure, drone' },
     { symbol: '2890', name: '永豐金', themes: 'financial, large_cap' },
     { symbol: '2883', name: '開發金', themes: 'financial, large_cap' },
     { symbol: '2892', name: '第一金', themes: 'financial, large_cap' },
@@ -87,8 +89,8 @@ const CONFIG = {
     { symbol: '2337', name: '旺宏', themes: 'memory, hot_rotation' },
     { symbol: '6515', name: '穎崴', themes: 'semiconductor_testing, ai_chip, hot_rotation' },
     { symbol: '2002', name: '中鋼', themes: 'steel, traditional_industry' },
-    { symbol: '3533', name: '嘉澤', themes: 'connectors, ai_server' },
-    { symbol: '1590', name: '亞德客-KY', themes: 'automation, robotics' },
+    { symbol: '3533', name: '嘉澤', themes: 'connectors, ai_server, ai_datacenter, robotics, ev' },
+    { symbol: '1590', name: '亞德客-KY', themes: 'automation, robotics, motion_control' },
     { symbol: '2207', name: '和泰車', themes: 'auto, traditional_industry' },
     { symbol: '3044', name: '健鼎', themes: 'pcb, large_cap' },
     { symbol: '2376', name: '技嘉', themes: 'ai_pc, server, hot_rotation' },
@@ -106,14 +108,48 @@ const CONFIG = {
     { symbol: '5871', name: '中租-KY', themes: 'leasing, financial' },
     { symbol: '3702', name: '大聯大', themes: 'semiconductor_distribution' },
     { symbol: '5876', name: '上海商銀', themes: 'financial, large_cap' },
-    { symbol: '1504', name: '東元', themes: 'motor, robotics, power, hot_rotation' },
+    { symbol: '1504', name: '東元', themes: 'motor, robotics, ev, power, ai_power_infrastructure, hot_rotation' },
     { symbol: '1101', name: '台泥', themes: 'cement, traditional_industry' },
     { symbol: '1605', name: '華新', themes: 'cable, power, traditional_industry' },
     { symbol: '2609', name: '陽明', themes: 'shipping, cyclical' },
     { symbol: '6139', name: '亞翔', themes: 'semiconductor_equipment, facility' },
     { symbol: '8210', name: '勤誠', themes: 'server_chassis, ai_server, hot_rotation' },
     { symbol: '6531', name: '愛普*', themes: 'memory, semiconductor, hot_rotation' },
-    { symbol: '6789', name: '采鈺', themes: 'semiconductor, optical_sensor' }
+    { symbol: '6789', name: '采鈺', themes: 'semiconductor, optical_sensor, space_ai, lunar_space' },
+    { symbol: '2367', name: '燿華', themes: 'leo_satellite, pcb, high_frequency_pcb, space_ai, hot_rotation' },
+    { symbol: '2314', name: '台揚', themes: 'leo_satellite, satellite_ground_equipment, rf, communications' },
+    { symbol: '3138', name: '耀登', themes: 'leo_satellite, antenna, rf_testing, communications, hot_rotation' },
+    { symbol: '2485', name: '兆赫', themes: 'leo_satellite, rf, communications' },
+    { symbol: '6568', name: '宏觀', themes: 'leo_satellite, rf_ic, communications' },
+    { symbol: '6672', name: '騰輝電子-KY', themes: 'leo_satellite, high_frequency_pcb, aerospace_materials' },
+    { symbol: '3363', name: '上詮', themes: 'cpo, silicon_photonics, optical_communication, quantum_photonics, ai_datacenter, hot_rotation' },
+    { symbol: '4979', name: '華星光', themes: 'optical_communication, cpo, ai_datacenter, hot_rotation' },
+    { symbol: '3234', name: '光環', themes: 'optical_communication, photonics, quantum_photonics, ai_datacenter' },
+    { symbol: '6442', name: '光聖', themes: 'optical_communication, cpo, ai_datacenter, hot_rotation' },
+    { symbol: '3081', name: '聯亞', themes: 'optical_communication, laser, silicon_photonics, quantum_photonics' },
+    { symbol: '4908', name: '前鼎', themes: 'optical_communication, photonics, ai_datacenter' },
+    { symbol: '6451', name: '訊芯-KY', themes: 'advanced_packaging, silicon_photonics, cpo, ai_chip' },
+    { symbol: '6829', name: '千附精密', themes: 'quantum_compute, precision_equipment, semiconductor_equipment, hot_rotation' },
+    { symbol: '8033', name: '雷虎', themes: 'drone, uav, defense, robotics, hot_rotation' },
+    { symbol: '5371', name: '中光電', themes: 'drone, uav, robotics, optical_sensor, defense' },
+    { symbol: '4916', name: '事欣科', themes: 'drone, defense, rugged_computing, uav' },
+    { symbol: '3416', name: '融程電', themes: 'drone, rugged_computing, industrial_pc, defense' },
+    { symbol: '4551', name: '智伸科', themes: 'ev, automotive_electronics, robotics, precision_components' },
+    { symbol: '1536', name: '和大', themes: 'ev, robotics, gear_reducer, automotive_components' },
+    { symbol: '8374', name: '羅昇', themes: 'robotics, automation, motion_control, hot_rotation' },
+    { symbol: '4562', name: '穎漢', themes: 'robotics, automation, machine_tool, hot_rotation' },
+    { symbol: '6640', name: '均華', themes: 'semiconductor_equipment, ai_chip, automation' },
+    { symbol: '3324', name: '雙鴻', themes: 'cooling, thermal, ai_server, ai_datacenter, hot_rotation' },
+    { symbol: '6274', name: '台燿', themes: 'pcb_ccl, high_frequency_pcb, ai_server, leo_satellite' },
+    { symbol: '5439', name: '高技', themes: 'pcb, ai_server, high_frequency_pcb' },
+    { symbol: '3013', name: '晟銘電', themes: 'server_chassis, ai_server, cloud_server' },
+    { symbol: '6414', name: '樺漢', themes: 'edge_ai, industrial_pc, robotics, cloud_infrastructure' },
+    { symbol: '3029', name: '零壹', themes: 'cloud_service, cybersecurity, ai_cloud' },
+    { symbol: '6214', name: '精誠', themes: 'cloud_service, cybersecurity, ai_cloud' },
+    { symbol: '3576', name: '聯合再生', themes: 'space_power, perovskite, lunar_space, solar' },
+    { symbol: '6443', name: '元晶', themes: 'space_power, perovskite, lunar_space, solar' },
+    { symbol: '5483', name: '中美晶', themes: 'space_power, perovskite, semiconductor_materials, lunar_space' },
+    { symbol: '3508', name: '位速', themes: 'space_power, perovskite, lunar_space' }
   ],
   apiKeyProperties: ['FUGLE_API_KEY', 'FUGLE_APIKEY', 'FUGLE_TOKEN', 'FUGLE_KEY', 'FUGLE', 'fugle']
 };
@@ -134,6 +170,7 @@ function onOpen() {
     .addItem('Refresh all-stock universe', 'refreshAllStockUniverseWeekly')
     .addItem('Refresh 500-stock scan pool', 'refreshStockScanPool500Daily')
     .addItem('Run daily stock scan', 'runDailyStockScan')
+    .addItem('Run daily stock scan manually', 'runDailyStockScanManual')
     .addItem('Monitor bad-news signals', 'monitorBadNewsSignals')
     .addItem('Refresh limit-up external evidence', 'refreshLimitUpExternalEvidence')
     .addItem('Setup limit-up external evidence', 'setupLimitUpExternalEvidenceSheet')
@@ -142,6 +179,8 @@ function onOpen() {
     .addItem('Continue minute backfill now', 'continueMinuteReplayBackfill')
     .addItem('Stop minute backfill', 'stopMinuteReplayBackfill')
     .addSeparator()
+    .addItem('One-click setup V1.2.3 triggers', 'installV123ProjectTriggers')
+    .addItem('One-click setup V2.4 triggers', 'installV24ProjectTriggers')
     .addItem('One-click setup recommended triggers', 'oneClickSetupProjectTriggers')
     .addItem('Audit project triggers', 'auditProjectTriggers')
     .addItem('Install stock trigger: every 1 day', 'installRecordTriggerEvery1Day')
@@ -308,24 +347,68 @@ function recordLatestDailyCandles() {
 }
 
 function recordMinuteReplayCandles() {
-  setupSheets();
-  if (!isTaiwanMarketCollectionWindow_(new Date())) {
-    log_('INFO', 'Skipped minute replay collection outside Taiwan market replay window.');
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(5000)) {
+    log_('WARN', 'Skipped minute replay collection because the previous run is still active.');
     return;
   }
 
-  const symbols = getEnabledSymbols_();
-  let written = 0;
-  symbols.forEach(symbol => {
-    try {
-      const count = appendNewMinuteReplayCandles_(symbol);
-      written += count;
-    } catch (error) {
-      log_('ERROR', `Minute replay failed for ${symbol}: ${error.message}`);
+  try {
+    setupMinuteReplaySheet_();
+    if (!isTaiwanMarketCollectionWindow_(new Date())) {
+      log_('INFO', 'Skipped minute replay collection outside Taiwan market replay window.');
+      return;
     }
-  });
 
-  log_('INFO', `Recorded ${written} new minute replay row(s).`);
+    const symbols = getEnabledSymbols_();
+    if (!symbols.length) {
+      log_('WARN', 'Skipped minute replay collection because no enabled symbols were found.');
+      return;
+    }
+
+    const cursor = createSymbolBatchCursor_(
+      symbols,
+      'MINUTE_REPLAY_SYMBOL_INDEX',
+      CONFIG.minuteReplayBatchSize,
+      CONFIG.minuteReplayMaxRunMs
+    );
+    let written = 0;
+    let processed = 0;
+    let errors = 0;
+
+    while (cursor.hasNext()) {
+      const symbol = cursor.next();
+      try {
+        const count = appendNewMinuteReplayCandles_(symbol);
+        written += count;
+      } catch (error) {
+        errors += 1;
+        log_('ERROR', `Minute replay failed for ${symbol}: ${error.message}`);
+      }
+      processed += 1;
+      cursor.save();
+    }
+
+    log_('INFO', `Minute replay processed ${processed}/${symbols.length} symbol(s), wrote ${written} new row(s), errors=${errors}, nextCursor=${cursor.index()}.`);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function setupMinuteReplaySheet_() {
+  const sheet = getOrCreateSheet_(getSpreadsheet_(), CONFIG.minuteReplaySheetName);
+  setHeader_(sheet, [
+    'symbol',
+    'date',
+    'open',
+    'high',
+    'low',
+    'close',
+    'volume',
+    'turnover',
+    'recordedAt',
+    'source'
+  ]);
 }
 
 function recordTodayMinuteReplayCandlesAfterClose() {
@@ -430,16 +513,18 @@ function getEnabledSymbols_() {
   const sheet = getOrCreateSheet_(getSpreadsheet_(), CONFIG.configSheetName);
   const values = sheet.getDataRange().getValues();
   if (values.length < 2) {
-    return CONFIG.defaultSymbols;
+    return CONFIG.defaultSymbols.filter(isValidTaiwanSymbol_);
   }
 
   return values.slice(1)
     .filter(row => String(row[0] || '').trim() && row[1] !== false && String(row[1]).toLowerCase() !== 'false')
     .map(row => normalizeSymbol_(row[0]))
+    .filter(isValidTaiwanSymbol_)
     .filter(Boolean);
 }
 
 function syncWatchlistRows_(sheet) {
+  formatSymbolColumnsAsText_(sheet);
   const values = sheet.getDataRange().getValues();
   const existing = new Map();
 
@@ -467,7 +552,7 @@ function syncWatchlistRows_(sheet) {
 
     const enabled = current.enabled === '' ? true : current.enabled;
     const name = current.name || item.name;
-    const themes = current.themes || item.themes;
+    const themes = mergeThemeTokens_(current.themes, item.themes);
     sheet.getRange(current.rowNumber, 1, 1, 5).setValues([[
       symbol,
       enabled,
@@ -480,6 +565,26 @@ function syncWatchlistRows_(sheet) {
   if (rowsToAppend.length) {
     sheet.getRange(sheet.getLastRow() + 1, 1, rowsToAppend.length, 5).setValues(rowsToAppend);
   }
+}
+
+function mergeThemeTokens_(currentThemes, defaultThemes) {
+  const merged = [];
+  const seen = {};
+  [currentThemes, defaultThemes].forEach(value => {
+    String(value || '')
+      .split(',')
+      .map(token => token.trim())
+      .filter(Boolean)
+      .forEach(token => {
+        const key = token.toLowerCase();
+        if (seen[key]) {
+          return;
+        }
+        seen[key] = true;
+        merged.push(key);
+      });
+  });
+  return merged.join(', ');
 }
 
 function fetchLatestDailyCandle_(symbol, from, to) {
@@ -768,7 +873,10 @@ function upsertHistoricalRow_(symbol, candle) {
 
 function appendRows_(sheetName, rows) {
   const sheet = getOrCreateSheet_(getSpreadsheet_(), sheetName);
-  sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
+  formatSymbolColumnsAsText_(sheet);
+  const range = sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, rows[0].length);
+  formatSymbolColumnsAsText_(sheet, range.getRow(), range.getNumRows());
+  range.setValues(rows);
 }
 
 function setHeader_(sheet, headers) {
@@ -776,6 +884,23 @@ function setHeader_(sheet, headers) {
   range.setValues([headers]);
   range.setFontWeight('bold');
   sheet.setFrozenRows(1);
+  formatSymbolColumnsAsText_(sheet);
+}
+
+function formatSymbolColumnsAsText_(sheet, startRow, numRows) {
+  const lastColumn = sheet.getLastColumn();
+  if (!lastColumn) {
+    return;
+  }
+  const headers = sheet.getRange(1, 1, 1, lastColumn).getValues()[0].map(header => String(header));
+  headers.forEach((header, index) => {
+    if (header !== 'symbol') {
+      return;
+    }
+    const row = startRow || 1;
+    const rows = numRows || sheet.getMaxRows();
+    sheet.getRange(row, index + 1, rows, 1).setNumberFormat('@');
+  });
 }
 
 function getSpreadsheet_() {
@@ -816,6 +941,40 @@ function normalizeSymbol_(value) {
     .replace(/^OTC[:\-]/, '')
     .replace(/\.(TW|TWO|TSE|OTC)$/, '')
     .replace(/[^0-9A-Z]/g, '');
+}
+
+function isValidTaiwanSymbol_(symbol) {
+  return /^\d{4,6}[A-Z]?$/.test(String(symbol || ''));
+}
+
+function createSymbolBatchCursor_(symbols, propertyName, batchSize, maxRunMs) {
+  const properties = PropertiesService.getScriptProperties();
+  const total = symbols.length;
+  let cursor = Number(properties.getProperty(propertyName) || '0');
+  if (!Number.isInteger(cursor) || cursor < 0 || cursor >= total) {
+    cursor = 0;
+  }
+  const startedAt = Date.now();
+  const limit = Math.min(Math.max(Number(batchSize) || 1, 1), total);
+  let processed = 0;
+
+  return {
+    hasNext() {
+      return processed < limit && Date.now() - startedAt < maxRunMs;
+    },
+    next() {
+      const symbol = symbols[cursor];
+      cursor = (cursor + 1) % total;
+      processed += 1;
+      return symbol;
+    },
+    save() {
+      properties.setProperty(propertyName, String(cursor));
+    },
+    index() {
+      return cursor;
+    }
+  };
 }
 
 function valueOrBlank_(value) {

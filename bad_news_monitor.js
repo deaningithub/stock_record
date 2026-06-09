@@ -1,10 +1,15 @@
 const BAD_NEWS_CONFIG = {
   sheetName: 'BadNewsMonitor',
   handlerName: 'monitorBadNewsSignals',
+  continuationHandlerName: 'continueBadNewsSignals',
   timezone: 'Asia/Taipei',
   openAiBaseUrl: 'https://api.openai.com/v1',
   openAiModel: 'gpt-5',
-  maxSymbolsPerRun: 27,
+  maxSymbolsPerRun: 8,
+  symbolUniverseLimit: 27,
+  continuationMinutes: 5,
+  maxRunMs: 240000,
+  maxOutputTokens: 6000,
   lookbackHours: 24,
   blockEntryRiskScore: 75,
   forceExitRiskScore: 85,
@@ -20,22 +25,83 @@ const BAD_NEWS_CONFIG = {
 };
 
 function monitorBadNewsSignals() {
-  setupBadNewsMonitorSheet_();
-  if (!isBadNewsMonitorWindow_(new Date())) {
-    log_('INFO', 'Skipped bad-news monitor outside configured Taiwan monitoring window.');
-    return;
+  return runBadNewsSignalsBatch_(false);
+}
+
+function continueBadNewsSignals() {
+  return runBadNewsSignalsBatch_(true);
+}
+
+function runBadNewsSignalsBatch_(continuation) {
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(5000)) {
+    log_('WARN', 'Skipped bad-news monitor because the previous run is still active.');
+    return 0;
   }
 
-  const symbols = getEnabledSymbols_().slice(0, BAD_NEWS_CONFIG.maxSymbolsPerRun);
-  if (!symbols.length) {
-    log_('WARN', 'Skipped bad-news monitor because no enabled symbols were found.');
-    return;
-  }
+  try {
+    setupBadNewsMonitorSheet_();
+    const now = new Date();
+    const sessionKey = getBadNewsMonitorSessionKey_(now);
+    if (!sessionKey) {
+      log_('INFO', `Skipped bad-news monitor outside ${getTriggerProfileMode_()} refresh windows.`);
+      return 0;
+    }
 
-  const inputs = buildBadNewsInputs_(symbols);
-  const result = callOpenAiBadNewsMonitor_(inputs);
-  writeBadNewsMonitorResult_(result, inputs);
-  log_('INFO', `Bad-news monitor wrote ${result.signals.length} signal row(s).`);
+    const symbols = getEnabledSymbols_().slice(0, BAD_NEWS_CONFIG.symbolUniverseLimit);
+    if (!symbols.length) {
+      log_('WARN', 'Skipped bad-news monitor because no enabled symbols were found.');
+      return 0;
+    }
+
+    const properties = PropertiesService.getScriptProperties();
+    const activeSessionKey = 'BAD_NEWS_ACTIVE_SESSION';
+    const completedSessionKey = 'BAD_NEWS_COMPLETED_SESSION';
+    const cursorKey = 'BAD_NEWS_SYMBOL_INDEX';
+
+    if (!continuation && properties.getProperty(completedSessionKey) === sessionKey) {
+      log_('INFO', `Skipped bad-news monitor because session ${sessionKey} is already complete.`);
+      return 0;
+    }
+    if (properties.getProperty(activeSessionKey) !== sessionKey) {
+      properties.setProperty(activeSessionKey, sessionKey);
+      properties.setProperty(cursorKey, '0');
+    }
+
+    let cursor = Number(properties.getProperty(cursorKey) || '0');
+    if (!Number.isInteger(cursor) || cursor < 0 || cursor >= symbols.length) {
+      cursor = 0;
+    }
+
+    const batch = symbols.slice(cursor, cursor + BAD_NEWS_CONFIG.maxSymbolsPerRun);
+    if (!batch.length) {
+      completeBadNewsSession_(sessionKey);
+      return 0;
+    }
+
+    try {
+      const inputs = buildBadNewsInputs_(batch);
+      const result = callOpenAiBadNewsMonitor_(inputs);
+      writeBadNewsMonitorResult_(result, inputs);
+      cursor += batch.length;
+      properties.setProperty(cursorKey, String(cursor));
+      log_('INFO', `Bad-news monitor session=${sessionKey} processed ${batch.length} symbol(s), wrote ${result.signals.length} signal row(s), cursor=${Math.min(cursor, symbols.length)}/${symbols.length}.`);
+    } catch (error) {
+      log_('ERROR', `Bad-news monitor session=${sessionKey} batch failed at cursor=${cursor}: ${error.message}`);
+      installBadNewsContinuationTrigger_();
+      return 0;
+    }
+
+    if (cursor < symbols.length) {
+      installBadNewsContinuationTrigger_();
+    } else {
+      completeBadNewsSession_(sessionKey);
+      log_('INFO', `Bad-news monitor completed session=${sessionKey} for ${symbols.length} symbol(s).`);
+    }
+    return batch.length;
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function setupBadNewsMonitorSheet_() {
@@ -46,7 +112,7 @@ function setupBadNewsMonitorSheet_() {
 function buildBadNewsInputs_(symbols) {
   const configRows = getConfigRowsBySymbol_();
   const latestValuations = getLatestSheetRowsBySymbol_(AI_VALUATION_CONFIG.sheetName, 'symbol', 'generatedAt');
-  const latestQuotes = getLatestSheetRowsBySymbol_(CONFIG.quoteSheetName, 'symbol', 'recordedAt');
+  const latestQuotes = getLatestSheetRowsBySymbol_(CONFIG.quoteSheetName, 'symbol', 'recordedAt', 10000);
   const generatedAt = new Date();
 
   return {
@@ -67,17 +133,10 @@ function buildBadNewsInputs_(symbols) {
 }
 
 function callOpenAiBadNewsMonitor_(inputs) {
-  const response = UrlFetchApp.fetch(`${BAD_NEWS_CONFIG.openAiBaseUrl}/responses`, {
-    method: 'post',
-    muteHttpExceptions: true,
-    contentType: 'application/json',
-    headers: {
-      Authorization: `Bearer ${getOpenAiApiKey_()}`
-    },
-    payload: JSON.stringify({
+  const payload = {
       model: BAD_NEWS_CONFIG.openAiModel,
-      reasoning: { effort: 'medium' },
-      max_output_tokens: 10000,
+      reasoning: { effort: 'low' },
+      max_output_tokens: BAD_NEWS_CONFIG.maxOutputTokens,
       tools: [{
         type: 'web_search',
         user_location: {
@@ -96,6 +155,8 @@ function callOpenAiBadNewsMonitor_(inputs) {
         'Separate real material negatives from routine volatility, rumors, and repeated old news.',
         'Use severity only from: none, watch, serious, critical.',
         'Be conservative with force-exit decisions: only critical or clearly material negative news should force exit.',
+        'Keep every per-symbol text field concise: headlineSummary <= 100 chars, evidence <= 160 chars, reasoning <= 160 chars.',
+        'Use at most 2 source URLs per symbol.',
         'Return only JSON matching the schema.'
       ].join('\n'),
       input: buildBadNewsPrompt_(inputs),
@@ -107,18 +168,14 @@ function callOpenAiBadNewsMonitor_(inputs) {
           schema: getBadNewsJsonSchema_()
         }
       }
-    })
-  });
+  };
 
-  const status = response.getResponseCode();
-  const text = response.getContentText();
-  if (status < 200 || status >= 300) {
-    const error = new Error(`OpenAI bad-news monitor failed (${status}): ${text}`);
-    error.statusCode = status;
-    error.responseText = text;
-    throw error;
-  }
-  return parseBadNewsResponse_(JSON.parse(text));
+  return parseBadNewsResponse_(fetchOpenAiResponsesWithRetry_(
+    `${BAD_NEWS_CONFIG.openAiBaseUrl}/responses`,
+    payload,
+    getOpenAiApiKey_(),
+    'bad-news monitor'
+  ));
 }
 
 function buildBadNewsPrompt_(inputs) {
@@ -147,7 +204,13 @@ function parseBadNewsResponse_(responseJson) {
   if (!text) {
     throw new Error('OpenAI bad-news response did not contain output text.');
   }
-  const parsed = JSON.parse(text);
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch (error) {
+    const preview = text.slice(Math.max(0, text.length - 500));
+    throw new Error(`OpenAI bad-news JSON parse failed: ${error.message}. outputLength=${text.length}. tail=${preview}`);
+  }
   if (!parsed.signals || !Array.isArray(parsed.signals)) {
     throw new Error('OpenAI bad-news response missing signals array.');
   }
@@ -192,11 +255,45 @@ function writeBadNewsMonitorResult_(result, inputs) {
 }
 
 function isBadNewsMonitorWindow_(date) {
+  return Boolean(getBadNewsMonitorSessionKey_(date));
+}
+
+function getBadNewsMonitorSessionKey_(date) {
   if (isWeekendTaipei_(date)) {
-    return false;
+    return '';
   }
   const hhmm = Number(Utilities.formatDate(date, BAD_NEWS_CONFIG.timezone, 'HHmm'));
-  return hhmm >= 800 && hhmm <= 1400;
+  const dateKey = Utilities.formatDate(date, BAD_NEWS_CONFIG.timezone, 'yyyy-MM-dd');
+  if (getTriggerProfileMode_() === 'v24') {
+    if (hhmm >= 735 && hhmm <= 835) {
+      return `${dateKey}_open`;
+    }
+    if (hhmm >= 1045 && hhmm <= 1135) {
+      return `${dateKey}_midday`;
+    }
+    return '';
+  }
+  if (hhmm >= 630 && hhmm <= 735) {
+    return `${dateKey}_open`;
+  }
+  return '';
+}
+
+function installBadNewsContinuationTrigger_() {
+  removeTriggersFor_(BAD_NEWS_CONFIG.continuationHandlerName);
+  ScriptApp.newTrigger(BAD_NEWS_CONFIG.continuationHandlerName)
+    .timeBased()
+    .everyMinutes(BAD_NEWS_CONFIG.continuationMinutes)
+    .create();
+  log_('INFO', `Installed bad-news continuation trigger every ${BAD_NEWS_CONFIG.continuationMinutes} minutes.`);
+}
+
+function completeBadNewsSession_(sessionKey) {
+  removeTriggersFor_(BAD_NEWS_CONFIG.continuationHandlerName);
+  const properties = PropertiesService.getScriptProperties();
+  properties.setProperty('BAD_NEWS_COMPLETED_SESSION', sessionKey);
+  properties.deleteProperty('BAD_NEWS_ACTIVE_SESSION');
+  properties.deleteProperty('BAD_NEWS_SYMBOL_INDEX');
 }
 
 function getBadNewsMonitorHeaders_() {
@@ -226,7 +323,7 @@ function getBadNewsJsonSchema_() {
     additionalProperties: false,
     required: ['marketRiskSummary', 'signals'],
     properties: {
-      marketRiskSummary: { type: 'string' },
+      marketRiskSummary: { type: 'string', maxLength: 500 },
       signals: {
         type: 'array',
         minItems: 1,
@@ -248,21 +345,22 @@ function getBadNewsJsonSchema_() {
           ],
           properties: {
             symbol: { type: 'string' },
-            name: { type: 'string' },
+            name: { type: 'string', maxLength: 40 },
             riskScore: { type: 'number' },
             severity: {
               type: 'string',
               enum: ['none', 'watch', 'serious', 'critical']
             },
-            riskType: { type: 'string' },
+            riskType: { type: 'string', maxLength: 80 },
             shouldBlockEntry: { type: 'boolean' },
             shouldForceExit: { type: 'boolean' },
-            headlineSummary: { type: 'string' },
-            evidence: { type: 'string' },
-            reasoning: { type: 'string' },
+            headlineSummary: { type: 'string', maxLength: 100 },
+            evidence: { type: 'string', maxLength: 160 },
+            reasoning: { type: 'string', maxLength: 160 },
             sources: {
               type: 'array',
-              items: { type: 'string' }
+              maxItems: 2,
+              items: { type: 'string', maxLength: 300 }
             }
           }
         }

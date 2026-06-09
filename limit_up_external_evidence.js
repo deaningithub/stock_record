@@ -1,9 +1,12 @@
 const LIMIT_UP_EXTERNAL_EVIDENCE_CONFIG = {
   sheetName: 'LimitUpExternalEvidence',
   handlerName: 'refreshLimitUpExternalEvidence',
+  continuationHandlerName: 'continueLimitUpExternalEvidence',
   timezone: 'Asia/Taipei',
-  maxSymbolsPerRun: 27,
-  maxOutputTokens: 18000
+  maxSymbolsPerRun: 8,
+  symbolUniverseLimit: 27,
+  continuationMinutes: 5,
+  maxOutputTokens: 9000
 };
 
 function setupLimitUpExternalEvidenceSheet() {
@@ -56,30 +59,91 @@ function getLimitUpExternalEvidenceHeaders_() {
 }
 
 function refreshLimitUpExternalEvidence() {
-  setupLimitUpExternalEvidenceSheet();
-  if (!isLimitUpExternalEvidenceWindow_(new Date())) {
-    log_('INFO', 'Skipped limit-up external evidence refresh outside configured Taiwan monitoring window.');
-    return;
+  return runLimitUpExternalEvidenceBatch_(false);
+}
+
+function continueLimitUpExternalEvidence() {
+  return runLimitUpExternalEvidenceBatch_(true);
+}
+
+function runLimitUpExternalEvidenceBatch_(continuation) {
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(5000)) {
+    log_('WARN', 'Skipped limit-up external evidence refresh because the previous run is still active.');
+    return 0;
   }
 
-  const symbols = getEnabledSymbols_().slice(0, LIMIT_UP_EXTERNAL_EVIDENCE_CONFIG.maxSymbolsPerRun);
-  if (!symbols.length) {
-    log_('WARN', 'Skipped limit-up external evidence refresh because no enabled symbols were found.');
-    return;
-  }
+  try {
+    setupLimitUpExternalEvidenceSheet();
+    const now = new Date();
+    const sessionKey = getLimitUpExternalEvidenceSessionKey_(now);
+    if (!sessionKey) {
+      log_('INFO', `Skipped limit-up external evidence refresh outside ${getTriggerProfileMode_()} refresh windows.`);
+      return 0;
+    }
 
-  const inputs = buildLimitUpExternalEvidenceInputs_(symbols);
-  const result = callOpenAiLimitUpExternalEvidence_(inputs);
-  writeLimitUpExternalEvidenceResult_(result, inputs);
-  log_('INFO', `Limit-up external evidence refreshed for ${result.evidence.length} symbol(s).`);
+    const symbols = getEnabledSymbols_().slice(0, LIMIT_UP_EXTERNAL_EVIDENCE_CONFIG.symbolUniverseLimit);
+    if (!symbols.length) {
+      log_('WARN', 'Skipped limit-up external evidence refresh because no enabled symbols were found.');
+      return 0;
+    }
+
+    const properties = PropertiesService.getScriptProperties();
+    const activeSessionKey = 'LIMIT_UP_EXTERNAL_EVIDENCE_ACTIVE_SESSION';
+    const completedSessionKey = 'LIMIT_UP_EXTERNAL_EVIDENCE_COMPLETED_SESSION';
+    const cursorKey = 'LIMIT_UP_EXTERNAL_EVIDENCE_SYMBOL_INDEX';
+
+    if (!continuation && properties.getProperty(completedSessionKey) === sessionKey) {
+      log_('INFO', `Skipped limit-up external evidence because session ${sessionKey} is already complete.`);
+      return 0;
+    }
+    if (properties.getProperty(activeSessionKey) !== sessionKey) {
+      properties.setProperty(activeSessionKey, sessionKey);
+      properties.setProperty(cursorKey, '0');
+    }
+
+    let cursor = Number(properties.getProperty(cursorKey) || '0');
+    if (!Number.isInteger(cursor) || cursor < 0 || cursor >= symbols.length) {
+      cursor = 0;
+    }
+
+    const batch = symbols.slice(cursor, cursor + LIMIT_UP_EXTERNAL_EVIDENCE_CONFIG.maxSymbolsPerRun);
+    if (!batch.length) {
+      completeLimitUpExternalEvidenceSession_(sessionKey);
+      return 0;
+    }
+
+    try {
+      const inputs = buildLimitUpExternalEvidenceInputs_(batch);
+      const result = callOpenAiLimitUpExternalEvidence_(inputs);
+      writeLimitUpExternalEvidenceResult_(result, inputs);
+      cursor += batch.length;
+      properties.setProperty(cursorKey, String(cursor));
+      log_('INFO', `Limit-up external evidence session=${sessionKey} refreshed ${result.evidence.length} symbol(s), cursor=${Math.min(cursor, symbols.length)}/${symbols.length}.`);
+    } catch (error) {
+      log_('ERROR', `Limit-up external evidence session=${sessionKey} batch failed at cursor=${cursor}: ${error.message}`);
+      installLimitUpExternalEvidenceContinuationTrigger_();
+      return 0;
+    }
+
+    if (cursor < symbols.length) {
+      installLimitUpExternalEvidenceContinuationTrigger_();
+    } else {
+      completeLimitUpExternalEvidenceSession_(sessionKey);
+      log_('INFO', `Limit-up external evidence completed session=${sessionKey} for ${symbols.length} symbol(s).`);
+    }
+    return batch.length;
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function buildLimitUpExternalEvidenceInputs_(symbols) {
   const configRows = getConfigRowsBySymbol_();
-  const latestQuotes = getLatestSheetRowsBySymbol_(CONFIG.quoteSheetName, 'symbol', 'recordedAt');
+  const latestQuotes = getLatestSheetRowsBySymbol_(CONFIG.quoteSheetName, 'symbol', 'recordedAt', 10000);
   const latestDaily = getLatestSheetRowsBySymbol_(CONFIG.historySheetName, 'symbol', 'date');
-  const latestBadNews = getLatestSheetRowsBySymbol_(BAD_NEWS_CONFIG.sheetName, 'symbol', 'generatedAt');
-  const latestAiValuation = getLatestSheetRowsBySymbol_(AI_VALUATION_CONFIG.sheetName, 'symbol', 'generatedAt');
+  const latestBadNews = getLatestSheetRowsBySymbol_(BAD_NEWS_CONFIG.sheetName, 'symbol', 'generatedAt', 1000);
+  const latestAiValuation = getLatestSheetRowsBySymbol_(AI_VALUATION_CONFIG.sheetName, 'symbol', 'generatedAt', 2000);
   const generatedAt = new Date();
 
   return {
@@ -102,16 +166,9 @@ function buildLimitUpExternalEvidenceInputs_(symbols) {
 }
 
 function callOpenAiLimitUpExternalEvidence_(inputs) {
-  const response = UrlFetchApp.fetch(`${AI_VALUATION_CONFIG.openAiBaseUrl}/responses`, {
-    method: 'post',
-    muteHttpExceptions: true,
-    contentType: 'application/json',
-    headers: {
-      Authorization: `Bearer ${getOpenAiApiKey_()}`
-    },
-    payload: JSON.stringify({
+  const payload = {
       model: AI_VALUATION_CONFIG.openAiModel,
-      reasoning: { effort: 'medium' },
+      reasoning: { effort: 'low' },
       max_output_tokens: LIMIT_UP_EXTERNAL_EVIDENCE_CONFIG.maxOutputTokens,
       tools: [{
         type: 'web_search',
@@ -131,7 +188,8 @@ function callOpenAiLimitUpExternalEvidence_(inputs) {
         'Do not pretend stale data is realtime. Always provide data dates and data_freshness_minutes.',
         'Use material bad-news fields exactly: material_bad_news boolean; bad_news_severity none/watch/serious/critical; bad_news_action ignore/observe/reduce/sell_before_reaction.',
         'Use numbers in shares or lots consistently per field when source units are clear; otherwise explain uncertainty in confidence_note.',
-        'Keep summaries concise. Return only JSON matching the schema.'
+        'Keep summaries concise: news_summary <= 120 chars, confidence_note <= 160 chars, bad_news_reason <= 120 chars.',
+        'Return only JSON matching the schema.'
       ].join('\n'),
       input: buildLimitUpExternalEvidencePrompt_(inputs),
       text: {
@@ -142,18 +200,14 @@ function callOpenAiLimitUpExternalEvidence_(inputs) {
           schema: getLimitUpExternalEvidenceJsonSchema_()
         }
       }
-    })
-  });
+  };
 
-  const status = response.getResponseCode();
-  const text = response.getContentText();
-  if (status < 200 || status >= 300) {
-    const error = new Error(`OpenAI limit-up external evidence failed (${status}): ${text}`);
-    error.statusCode = status;
-    error.responseText = text;
-    throw error;
-  }
-  return parseLimitUpExternalEvidenceResponse_(JSON.parse(text));
+  return parseLimitUpExternalEvidenceResponse_(fetchOpenAiResponsesWithRetry_(
+    `${AI_VALUATION_CONFIG.openAiBaseUrl}/responses`,
+    payload,
+    getOpenAiApiKey_(),
+    'limit-up external evidence'
+  ));
 }
 
 function buildLimitUpExternalEvidencePrompt_(inputs) {
@@ -199,7 +253,7 @@ function writeLimitUpExternalEvidenceResult_(result, inputs) {
     return [
       normalizeSymbol_(item.symbol),
       item.date || inputs.tradeDate,
-      item.checked_at || inputs.checkedAtTaipei,
+      inputs.checkedAtTaipei,
       valueOrBlank_(item.news_score),
       item.has_bad_news === true,
       item.has_good_news === true,
@@ -266,11 +320,45 @@ function shouldTriggerLimitUpExternalEvidence_(evidence) {
 }
 
 function isLimitUpExternalEvidenceWindow_(date) {
+  return Boolean(getLimitUpExternalEvidenceSessionKey_(date));
+}
+
+function getLimitUpExternalEvidenceSessionKey_(date) {
   if (isWeekendTaipei_(date)) {
-    return false;
+    return '';
   }
   const hhmm = Number(Utilities.formatDate(date, LIMIT_UP_EXTERNAL_EVIDENCE_CONFIG.timezone, 'HHmm'));
-  return hhmm >= 830 && hhmm <= 1335;
+  const dateKey = Utilities.formatDate(date, LIMIT_UP_EXTERNAL_EVIDENCE_CONFIG.timezone, 'yyyy-MM-dd');
+  if (getTriggerProfileMode_() === 'v24') {
+    if (hhmm >= 755 && hhmm <= 845) {
+      return `${dateKey}_open`;
+    }
+    if (hhmm >= 1110 && hhmm <= 1150) {
+      return `${dateKey}_midday`;
+    }
+    return '';
+  }
+  if (hhmm >= 645 && hhmm <= 845) {
+    return `${dateKey}_open`;
+  }
+  return '';
+}
+
+function installLimitUpExternalEvidenceContinuationTrigger_() {
+  removeTriggersFor_(LIMIT_UP_EXTERNAL_EVIDENCE_CONFIG.continuationHandlerName);
+  ScriptApp.newTrigger(LIMIT_UP_EXTERNAL_EVIDENCE_CONFIG.continuationHandlerName)
+    .timeBased()
+    .everyMinutes(LIMIT_UP_EXTERNAL_EVIDENCE_CONFIG.continuationMinutes)
+    .create();
+  log_('INFO', `Installed limit-up external evidence continuation trigger every ${LIMIT_UP_EXTERNAL_EVIDENCE_CONFIG.continuationMinutes} minutes.`);
+}
+
+function completeLimitUpExternalEvidenceSession_(sessionKey) {
+  removeTriggersFor_(LIMIT_UP_EXTERNAL_EVIDENCE_CONFIG.continuationHandlerName);
+  const properties = PropertiesService.getScriptProperties();
+  properties.setProperty('LIMIT_UP_EXTERNAL_EVIDENCE_COMPLETED_SESSION', sessionKey);
+  properties.deleteProperty('LIMIT_UP_EXTERNAL_EVIDENCE_ACTIVE_SESSION');
+  properties.deleteProperty('LIMIT_UP_EXTERNAL_EVIDENCE_SYMBOL_INDEX');
 }
 
 function normalizeLimitUpBadNewsSeverity_(severity) {

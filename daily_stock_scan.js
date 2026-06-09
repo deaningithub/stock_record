@@ -7,7 +7,17 @@ const DAILY_STOCK_SCAN_CONFIG = {
   maxSymbols: 100,
   topPickCount: 20,
   minTradableScore: 55,
-  preferredThemePattern: /(ai_server|semiconductor|pcb|memory|robotics|power|heavy_electric|cooling|asic|hot_rotation|server|edge_ai|ai_pc)/,
+  preferredThemePattern: /(ai_server|ai_chip|ai_datacenter|ai_infrastructure|compute_infrastructure|semiconductor|pcb|memory|hbm|robotics|power|heavy_electric|cooling|asic|server|cloud_server|cloud_service|cloud_infrastructure|ai_cloud|cloud_networking|edge_ai|ai_pc|leo_satellite|satellite|quantum|drone|uav|lunar_space|space_ai)/,
+  targetThemeMaxScore: 38,
+  targetThemeRules: [
+    { pattern: /(ai_server|ai_chip|ai_datacenter|ai_infrastructure|compute_infrastructure|semiconductor|advanced_packaging|pcb|pcb_ccl|pcb_ic_substrate|high_frequency_pcb|memory|hbm|asic|server|cloud_server|cloud_service|cloud_infrastructure|ai_cloud|cloud_networking|datacenter|cooling|thermal|power|heavy_electric|optical_communication|cpo|silicon_photonics|networking)/, points: 20, reason: 'AI infrastructure theme' },
+    { pattern: /(leo_satellite|satellite|satellite_terminal|satellite_ground_equipment|rf|antenna|aerospace|space_ai|high_frequency_pcb|communications)/, points: 16, reason: 'LEO/space communications theme' },
+    { pattern: /(quantum|quantum_compute|quantum_comm|quantum_photonics|photonics|silicon_photonics|optical_communication|cybersecurity|precision_equipment)/, points: 12, reason: 'quantum/photonics theme' },
+    { pattern: /(robotics|automation|motion_control|gear_reducer|ev|drone|uav|autonomous|motor|industrial_pc|rugged_computing|defense)/, points: 14, reason: 'robot/EV/drone theme' },
+    { pattern: /(lunar_space|moonshot|space_power|perovskite|solar|aerospace|space_ai|optical_sensor|robotics|uav)/, points: 8, reason: 'lunar/space optionality' }
+  ],
+  nonTargetThemePattern: /(financial|consumer|defensive|shipping|airline|tourism|cement|steel|plastics|petrochemical|traditional_industry|brokerage)/,
+  nonTargetThemePenalty: 10,
   snapshotMarkets: ['TSE', 'OTC'],
   minUsefulTradeValue: 10000000,
   fullLiquidityTradeValue: 1000000000,
@@ -85,6 +95,11 @@ function refreshAllStockUniverseWeekly() {
 
 function refreshStockScanPool500Daily() {
   setupStockScanPool500Sheet_();
+  if (isWeekendTaipei_(new Date())) {
+    log_('INFO', 'Skipped 500-stock scan pool refresh on weekend.');
+    return 0;
+  }
+
   let universe = readAllStockUniverse_();
   if (!universe.length) {
     refreshAllStockUniverseWeekly();
@@ -117,10 +132,18 @@ function refreshStockScanPool500Daily() {
 }
 
 function runDailyStockScan() {
+  return runDailyStockScan_(false);
+}
+
+function runDailyStockScanManual() {
+  return runDailyStockScan_(true);
+}
+
+function runDailyStockScan_(forceRun) {
   setupDailyStockScanSheet_();
-  if (isWeekendTaipei_(new Date())) {
+  if (!forceRun && isWeekendTaipei_(new Date())) {
     log_('INFO', 'Skipped daily stock scan on weekend.');
-    return;
+    return 0;
   }
 
   let poolSymbols = getStockScanPool500Symbols_();
@@ -134,7 +157,7 @@ function runDailyStockScan() {
   const symbols = poolSymbols.slice(0, DAILY_STOCK_SCAN_CONFIG.pool500Size);
   if (!symbols.length) {
     log_('WARN', 'Skipped daily stock scan because no enabled symbols were found.');
-    return;
+    return 0;
   }
 
   const inputs = buildDailyStockScanInputs_(symbols);
@@ -149,7 +172,8 @@ function runDailyStockScan() {
   });
 
   replaceDailyStockScanRows_(rows);
-  log_('INFO', `Daily stock scan ranked ${rows.length} symbol(s); top ${DAILY_STOCK_SCAN_CONFIG.topPickCount} marked as pick candidates.`);
+  log_('INFO', `Daily stock scan ranked ${rows.length} symbol(s); top ${DAILY_STOCK_SCAN_CONFIG.topPickCount} marked as pick candidates.${forceRun ? ' Manual force run bypassed weekend guard.' : ''}`);
+  return rows.length;
 }
 
 function setupDailyStockScanSheet_() {
@@ -252,8 +276,8 @@ function getDailyStockScanHeaders_() {
 function buildPoolEvidenceInputs_() {
   return {
     configRows: getConfigRowsBySymbol_(),
-    latestQuote: getLatestSheetRowsBySymbol_(CONFIG.quoteSheetName, 'symbol', 'recordedAt'),
-    latestRealtime: getLatestSheetRowsBySymbol_(GAS_REALTIME_CONFIG.sheetName, 'symbol', 'recordedAt'),
+    latestQuote: getLatestSheetRowsBySymbol_(CONFIG.quoteSheetName, 'symbol', 'recordedAt', 10000),
+    latestRealtime: getLatestSheetRowsBySymbol_(GAS_REALTIME_CONFIG.sheetName, 'symbol', 'recordedAt', GAS_REALTIME_CONFIG.historyLookbackRows),
     latestAiValuation: getLatestSheetRowsBySymbol_(AI_VALUATION_CONFIG.sheetName, 'symbol', 'generatedAt'),
     latestBadNews: getLatestSheetRowsBySymbol_(BAD_NEWS_CONFIG.sheetName, 'symbol', 'generatedAt'),
     latestExternalEvidence: getLatestSheetRowsBySymbol_(LIMIT_UP_EXTERNAL_EVIDENCE_CONFIG.sheetName, 'symbol', 'checked_at'),
@@ -310,13 +334,13 @@ function scoreStockPoolCandidate_(item, universeItem) {
 
   if (isCoreWatchlistSymbol_(item.symbol)) {
     score += 24;
-    reasons.push('current 100 seed');
+    reasons.push('priority seed');
   }
 
-  const themeText = String(item.config.themes || '').toLowerCase();
-  if (DAILY_STOCK_SCAN_CONFIG.preferredThemePattern.test(themeText)) {
-    score += 12;
-    reasons.push('preferred strategy theme');
+  const themeResult = scoreTargetThemes_(item.config.themes);
+  score += themeResult.score;
+  if (themeResult.reasons.length) {
+    reasons.push.apply(reasons, themeResult.reasons);
   }
 
   const externalScore = Number(item.external.external_score);
@@ -386,8 +410,8 @@ function scoreStockPoolCandidate_(item, universeItem) {
 function buildDailyStockScanInputs_(symbols) {
   const configRows = getConfigRowsBySymbol_();
   const latestDaily = getLatestSheetRowsBySymbol_(CONFIG.historySheetName, 'symbol', 'date');
-  const latestQuote = getLatestSheetRowsBySymbol_(CONFIG.quoteSheetName, 'symbol', 'recordedAt');
-  const latestRealtime = getLatestSheetRowsBySymbol_(GAS_REALTIME_CONFIG.sheetName, 'symbol', 'recordedAt');
+  const latestQuote = getLatestSheetRowsBySymbol_(CONFIG.quoteSheetName, 'symbol', 'recordedAt', 10000);
+  const latestRealtime = getLatestSheetRowsBySymbol_(GAS_REALTIME_CONFIG.sheetName, 'symbol', 'recordedAt', GAS_REALTIME_CONFIG.historyLookbackRows);
   const latestAiValuation = getLatestSheetRowsBySymbol_(AI_VALUATION_CONFIG.sheetName, 'symbol', 'generatedAt');
   const latestBadNews = getLatestSheetRowsBySymbol_(BAD_NEWS_CONFIG.sheetName, 'symbol', 'generatedAt');
   const latestExternalEvidence = getLatestSheetRowsBySymbol_(LIMIT_UP_EXTERNAL_EVIDENCE_CONFIG.sheetName, 'symbol', 'checked_at');
@@ -464,6 +488,15 @@ function scoreDailyStockCandidate_(item) {
   const external = item.external;
   let score = 50;
   const reasons = [];
+
+  const themeResult = scoreTargetThemes_(item.config.themes);
+  if (themeResult.score > 0) {
+    score += Math.round(themeResult.score / 4);
+    reasons.push(themeResult.reasons[0] || 'target theme');
+  } else if (themeResult.score < 0) {
+    score += Math.round(themeResult.score / 3);
+    reasons.push(themeResult.reasons[0] || 'non-target theme');
+  }
 
   score = addScore_(score, reasons, Number(realtime.changePct), 0, 4, 10, 'positive intraday change');
   score = addScore_(score, reasons, Number(realtime.priceChange5m), 0, 2.5, 8, '5m price acceleration');
@@ -554,6 +587,29 @@ function scoreDailyStockCandidate_(item) {
   return {
     score: clamp_(Math.round(score), 0, 100),
     reasons: reasons.slice(0, 8)
+  };
+}
+
+function scoreTargetThemes_(themes) {
+  const text = String(themes || '').toLowerCase();
+  if (!text) {
+    return { score: 0, reasons: [] };
+  }
+  let score = 0;
+  const reasons = [];
+  DAILY_STOCK_SCAN_CONFIG.targetThemeRules.forEach(rule => {
+    if (rule.pattern.test(text)) {
+      score += rule.points;
+      reasons.push(rule.reason);
+    }
+  });
+  if (DAILY_STOCK_SCAN_CONFIG.nonTargetThemePattern.test(text)) {
+    score -= DAILY_STOCK_SCAN_CONFIG.nonTargetThemePenalty;
+    reasons.push('legacy non-target theme');
+  }
+  return {
+    score: clamp_(score, -DAILY_STOCK_SCAN_CONFIG.nonTargetThemePenalty, DAILY_STOCK_SCAN_CONFIG.targetThemeMaxScore),
+    reasons: reasons.slice(0, 5)
   };
 }
 
@@ -673,10 +729,34 @@ function classifyDailyStockSetup_(item, score) {
   if (!isNaN(upsidePct) && upsidePct >= 8 && score >= DAILY_STOCK_SCAN_CONFIG.minTradableScore) {
     return 'valuation_momentum';
   }
+  const themeSetup = classifyTargetThemeSetup_(item.config.themes);
+  if (themeSetup) {
+    return themeSetup;
+  }
   if (!isNaN(poolScore) && poolScore >= 75) {
     return 'pool_leader';
   }
   return 'watchlist_candidate';
+}
+
+function classifyTargetThemeSetup_(themes) {
+  const text = String(themes || '').toLowerCase();
+  if (/(lunar_space|moonshot|space_power|perovskite|space_ai)/.test(text)) {
+    return 'lunar_space';
+  }
+  if (/(leo_satellite|satellite|satellite_terminal|satellite_ground_equipment|rf|antenna|aerospace)/.test(text)) {
+    return 'space_satellite';
+  }
+  if (/(quantum|quantum_compute|quantum_comm|quantum_photonics|photonics|silicon_photonics)/.test(text)) {
+    return 'quantum_photonics';
+  }
+  if (/(robotics|automation|motion_control|gear_reducer|ev|drone|uav|autonomous|industrial_pc|rugged_computing|defense)/.test(text)) {
+    return 'robot_ev_drone';
+  }
+  if (/(ai_server|ai_chip|ai_datacenter|ai_infrastructure|compute_infrastructure|semiconductor|advanced_packaging|pcb|memory|hbm|asic|server|cloud_server|cloud_service|cloud_infrastructure|ai_cloud|cloud_networking|datacenter|cooling|thermal|power|heavy_electric|cpo|optical_communication|networking)/.test(text)) {
+    return 'ai_infrastructure';
+  }
+  return '';
 }
 
 function classifyDailyStockRisk_(item) {
@@ -712,6 +792,7 @@ function replaceSheetRows_(sheetName, headers, rows) {
     sheet.getRange(2, 1, lastRow - 1, lastColumn).clearContent();
   }
   if (rows.length) {
+    formatSymbolColumnsAsText_(sheet, 2, rows.length);
     sheet.getRange(2, 1, rows.length, lastColumn).setValues(rows);
   }
 }
